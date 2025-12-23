@@ -1,0 +1,124 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-payments-tr"
+version = "0.1.0"
+description = "Payment processing for Django with Turkey-specific features (iyzico, Stripe, EFT, KDV)"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Emre Aladağ", email = "emre@aladagemre.com" }
+]
+keywords = [
+    "django",
+    "payments",
+    "turkey",
+    "iyzico",
+    "stripe",
+    "eft",
+    "kdv",
+    "vat",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2",
+]
+
+[project.optional-dependencies]
+iyzico = ["django-iyzico>=0.2"]
+stripe = ["stripe>=5.0"]
+all = [
+    "django-iyzico>=0.2",
+    "stripe>=5.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.5",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8",
+    "django-stubs>=4.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/aladagemre/django-payments-tr"
+Documentation = "https://github.com/aladagemre/django-payments-tr#readme"
+Repository = "https://github.com/aladagemre/django-payments-tr"
+Issues = "https://github.com/aladagemre/django-payments-tr/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/payments_tr"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "settings"
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "DJ",     # flake8-django
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "DJ001",  # Allow null=True on CharField for optional EFT fields
+]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main"]
+strict = true
+warn_unreachable = true
+
+[tool.django-stubs]
+django_settings_module = "settings"
+
+[tool.coverage.run]
+source = ["src/payments_tr"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.uv.sources]
+django-iyzico = { path = "../django-iyzico", editable = true }
+
+[dependency-groups]
+dev = [
+    "django-iyzico",
+]
