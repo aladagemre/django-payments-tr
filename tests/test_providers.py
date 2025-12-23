@@ -1,6 +1,5 @@
 """Tests for payment provider abstraction."""
 
-
 import pytest
 
 from payments_tr.providers import (

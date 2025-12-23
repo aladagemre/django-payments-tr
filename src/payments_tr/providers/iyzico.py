@@ -55,7 +55,7 @@ class IyzicoAdapter(PaymentProvider):
     def __init__(self) -> None:
         """Initialize the iyzico adapter."""
         try:
-            from django_iyzico import IyzicoClient
+            from django_iyzico import IyzicoClient  # type: ignore[attr-defined]
 
             self._client = IyzicoClient()
         except ImportError as e:
@@ -292,11 +292,9 @@ class IyzicoAdapter(PaymentProvider):
 
             # Parse the callback data
             if isinstance(payload, bytes):
-                data = json.loads(payload.decode("utf-8"))
-            elif isinstance(payload, dict):
-                data = payload
+                data: dict[str, Any] = json.loads(payload.decode("utf-8"))
             else:
-                data = {}
+                data = payload
 
             token = data.get("token") or kwargs.get("token")
 
@@ -316,12 +314,11 @@ class IyzicoAdapter(PaymentProvider):
                     provider_payment_id=confirm_result.provider_payment_id,
                     status="succeeded",
                 )
-            else:
-                return WebhookResult(
-                    success=False,
-                    event_type="payment.failed",
-                    error_message=confirm_result.error_message,
-                )
+            return WebhookResult(
+                success=False,
+                event_type="payment.failed",
+                error_message=confirm_result.error_message,
+            )
 
         except Exception as e:
             # Extract error details if available
@@ -414,16 +411,20 @@ class IyzicoAdapter(PaymentProvider):
                 name=getattr(
                     user,
                     "first_name",
-                    getattr(user, "name", "").split()[0]
-                    if getattr(user, "name", "")
-                    else "Customer",
+                    (
+                        getattr(user, "name", "").split()[0]
+                        if getattr(user, "name", "")
+                        else "Customer"
+                    ),
                 ),
                 surname=getattr(
                     user,
                     "last_name",
-                    getattr(user, "name", "").split()[-1]
-                    if len(getattr(user, "name", "").split()) > 1
-                    else "Customer",
+                    (
+                        getattr(user, "name", "").split()[-1]
+                        if len(getattr(user, "name", "").split()) > 1
+                        else "Customer"
+                    ),
                 ),
                 phone=getattr(client, "phone", ""),
             )

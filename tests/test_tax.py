@@ -4,18 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from payments_tr.tax import (
-    KDVRate,
-    amount_with_kdv,
-    calculate_kdv,
-    extract_kdv,
-    format_currency,
-)
-from payments_tr.tax.kdv import (
-    calculate_commission,
-    get_kdv_breakdown,
-    net_after_commission,
-)
+from payments_tr.tax import KDVRate, amount_with_kdv, calculate_kdv, extract_kdv, format_currency
+from payments_tr.tax.kdv import calculate_commission, get_kdv_breakdown, net_after_commission
 
 
 class TestKDVRate:

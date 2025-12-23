@@ -24,7 +24,7 @@ from payments_tr.providers.base import (
 )
 
 if TYPE_CHECKING:
-    import stripe as stripe_module
+    import stripe as stripe_module  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ class StripeAdapter(PaymentProvider):
         """Initialize the Stripe adapter."""
         try:
             import stripe
+
             self._stripe: stripe_module = stripe
         except ImportError as e:
             raise ImportError(

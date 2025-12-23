@@ -8,11 +8,7 @@ This module provides:
 """
 
 from payments_tr.eft.admin import EFTPaymentAdminMixin, EFTPaymentListFilter
-from payments_tr.eft.models import (
-    AbstractEFTPayment,
-    EFTPaymentFieldsMixin,
-    EFTStatus,
-)
+from payments_tr.eft.models import AbstractEFTPayment, EFTPaymentFieldsMixin, EFTStatus
 from payments_tr.eft.services import EFTApprovalService
 
 __all__ = [

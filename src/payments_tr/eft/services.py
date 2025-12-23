@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
     from django.db.models import QuerySet
 
+    # Type alias for user with ID
+    UserWithID = AbstractUser
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,7 +108,10 @@ class EFTApprovalService:
                 payment.approve(user)
                 logger.info(
                     f"EFT payment {payment_id} approved by {user}",
-                    extra={"payment_id": payment_id, "user_id": user.id},
+                    extra={
+                        "payment_id": payment_id,
+                        "user_id": getattr(user, "id", None),
+                    },
                 )
 
             if notify:
@@ -164,7 +170,7 @@ class EFTApprovalService:
                     f"EFT payment {payment_id} rejected by {user}: {reason}",
                     extra={
                         "payment_id": payment_id,
-                        "user_id": user.id,
+                        "user_id": getattr(user, "id", None),
                         "reason": reason,
                     },
                 )
@@ -189,7 +195,7 @@ class EFTApprovalService:
 
     def bulk_approve(
         self,
-        payments: QuerySet | list,
+        payments: QuerySet[Any] | list[EFTPaymentProtocol],
         user: AbstractUser,
         *,
         notify: bool = True,
@@ -213,7 +219,7 @@ class EFTApprovalService:
 
     def bulk_reject(
         self,
-        payments: QuerySet | list,
+        payments: QuerySet[Any] | list[EFTPaymentProtocol],
         user: AbstractUser,
         reason: str = "",
         *,
@@ -237,7 +243,7 @@ class EFTApprovalService:
             results.append(result)
         return results
 
-    def get_pending_payments(self, queryset: QuerySet) -> QuerySet:
+    def get_pending_payments(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
         """
         Filter queryset to only pending EFT payments.
 

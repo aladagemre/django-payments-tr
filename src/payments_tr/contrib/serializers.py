@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from rest_framework import serializers
+    from rest_framework import serializers  # type: ignore[import-not-found]
 except ImportError as e:
     raise ImportError(
         "djangorestframework is required for payments_tr.contrib.serializers. "
@@ -20,7 +20,7 @@ except ImportError as e:
 from payments_tr.providers.base import BuyerInfo, PaymentResult, RefundResult
 
 
-class BuyerInfoSerializer(serializers.Serializer):
+class BuyerInfoSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for buyer information."""
 
     id = serializers.CharField(required=False, allow_blank=True)
@@ -40,7 +40,7 @@ class BuyerInfoSerializer(serializers.Serializer):
         return BuyerInfo(**validated_data)
 
 
-class PaymentIntentCreateSerializer(serializers.Serializer):
+class PaymentIntentCreateSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for creating a payment intent."""
 
     currency = serializers.CharField(default="TRY", max_length=3)
@@ -56,7 +56,7 @@ class PaymentIntentCreateSerializer(serializers.Serializer):
     buyer_country = serializers.CharField(required=False, default="Turkey")
 
 
-class PaymentResultSerializer(serializers.Serializer):
+class PaymentResultSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for payment result response."""
 
     success = serializers.BooleanField()
@@ -74,7 +74,7 @@ class PaymentResultSerializer(serializers.Serializer):
         return cls(data=result.to_dict())
 
 
-class RefundCreateSerializer(serializers.Serializer):
+class RefundCreateSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for creating a refund."""
 
     amount = serializers.IntegerField(
@@ -91,7 +91,7 @@ class RefundCreateSerializer(serializers.Serializer):
     )
 
 
-class RefundResultSerializer(serializers.Serializer):
+class RefundResultSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for refund result response."""
 
     success = serializers.BooleanField()
@@ -107,7 +107,7 @@ class RefundResultSerializer(serializers.Serializer):
         return cls(data=result.to_dict())
 
 
-class EFTPaymentCreateSerializer(serializers.Serializer):
+class EFTPaymentCreateSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for creating an EFT payment."""
 
     bank_name = serializers.CharField(max_length=100)
@@ -117,7 +117,7 @@ class EFTPaymentCreateSerializer(serializers.Serializer):
     receipt = serializers.FileField(required=False, allow_null=True)
 
 
-class IyzicoCallbackSerializer(serializers.Serializer):
+class IyzicoCallbackSerializer(serializers.Serializer):  # type: ignore[misc]
     """Serializer for iyzico callback data."""
 
     token = serializers.CharField(required=True)

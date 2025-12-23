@@ -7,9 +7,14 @@ workflows, including approval tracking.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser
 
 
 class EFTStatus(models.TextChoices):
@@ -179,7 +184,7 @@ class AbstractEFTPayment(EFTPaymentFieldsMixin):
             models.Index(fields=["created_at"]),
         ]
 
-    def approve(self, user, save: bool = True) -> None:
+    def approve(self, user: AbstractUser | Any, save: bool = True) -> None:
         """
         Approve this EFT payment.
 
@@ -204,7 +209,7 @@ class AbstractEFTPayment(EFTPaymentFieldsMixin):
                 ]
             )
 
-    def reject(self, user, reason: str = "", save: bool = True) -> None:
+    def reject(self, user: AbstractUser | Any, reason: str = "", save: bool = True) -> None:
         """
         Reject this EFT payment.
 

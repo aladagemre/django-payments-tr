@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin, messages
-from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -86,27 +86,24 @@ class EFTPaymentAdminMixin:
     def eft_status_display(self, obj: Any) -> str:
         """Display EFT status with color coding."""
         if hasattr(obj, "is_eft_approved") and obj.is_eft_approved:
-            return format_html(
-                '<span style="color: #28a745; font-weight: bold;">'
-                "&#x2713; Approved</span>"
+            return mark_safe(
+                '<span style="color: #28a745; font-weight: bold;">' "&#x2713; Approved</span>"
             )
         elif hasattr(obj, "is_eft_rejected") and obj.is_eft_rejected:
-            return format_html(
-                '<span style="color: #dc3545; font-weight: bold;">'
-                "&#x2717; Rejected</span>"
+            return mark_safe(
+                '<span style="color: #dc3545; font-weight: bold;">' "&#x2717; Rejected</span>"
             )
         elif hasattr(obj, "eft_reference_number") and obj.eft_reference_number:
-            return format_html(
-                '<span style="color: #ffc107; font-weight: bold;">'
-                "&#x23F3; Pending</span>"
+            return mark_safe(
+                '<span style="color: #ffc107; font-weight: bold;">' "&#x23F3; Pending</span>"
             )
-        return format_html('<span style="color: #6c757d;">N/A</span>')
+        return mark_safe('<span style="color: #6c757d;">N/A</span>')
 
     @admin.action(description="Approve selected EFT payments")
     def approve_eft_payments(
         self,
         request: HttpRequest,
-        queryset: QuerySet,
+        queryset: QuerySet[Any],
     ) -> None:
         """Admin action to approve selected EFT payments."""
         approved_count = 0
@@ -117,7 +114,7 @@ class EFTPaymentAdminMixin:
                 # Trigger any post-approval logic
                 self._on_eft_approved(request, payment)
 
-        self.message_user(
+        self.message_user(  # type: ignore[attr-defined]
             request,
             f"Successfully approved {approved_count} EFT payment(s).",
             messages.SUCCESS,
@@ -127,7 +124,7 @@ class EFTPaymentAdminMixin:
     def reject_eft_payments(
         self,
         request: HttpRequest,
-        queryset: QuerySet,
+        queryset: QuerySet[Any],
     ) -> None:
         """Admin action to reject selected EFT payments."""
         rejected_count = 0
@@ -138,7 +135,7 @@ class EFTPaymentAdminMixin:
                 # Trigger any post-rejection logic
                 self._on_eft_rejected(request, payment)
 
-        self.message_user(
+        self.message_user(  # type: ignore[attr-defined]
             request,
             f"Rejected {rejected_count} EFT payment(s).",
             messages.WARNING,
@@ -203,7 +200,7 @@ class EFTPaymentListFilter(admin.SimpleListFilter):
     def lookups(
         self,
         request: HttpRequest,
-        model_admin: admin.ModelAdmin,
+        model_admin: admin.ModelAdmin[Any],
     ) -> list[tuple[str, str]]:
         """Return filter options."""
         return [
@@ -216,8 +213,8 @@ class EFTPaymentListFilter(admin.SimpleListFilter):
     def queryset(
         self,
         request: HttpRequest,
-        queryset: QuerySet,
-    ) -> QuerySet:
+        queryset: QuerySet[Any],
+    ) -> QuerySet[Any]:
         """Filter queryset based on selected option."""
         value = self.value()
 
