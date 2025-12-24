@@ -45,6 +45,31 @@ class TestValidateTCKN:
             validate_tckn("123", raise_exception=True)
         assert exc_info.value.code == "invalid_length"
 
+    def test_raise_exception_invalid_format(self):
+        """Test raising exception for non-digit TCKN."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_tckn("1234567890a", raise_exception=True)
+        assert exc_info.value.code == "invalid_format"
+
+    def test_raise_exception_starts_with_zero(self):
+        """Test raising exception for TCKN starting with 0."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_tckn("01234567890", raise_exception=True)
+        assert exc_info.value.code == "invalid_start"
+
+    def test_raise_exception_checksum_digit_10(self):
+        """Test raising exception for checksum failure on digit 10."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_tckn("12345678901", raise_exception=True)
+        assert exc_info.value.code == "invalid_checksum"
+
+    def test_raise_exception_checksum_digit_11(self):
+        """Test raising exception for checksum failure on digit 11."""
+        # This TCKN has valid first 10 digits but invalid 11th digit
+        with pytest.raises(ValidationError) as exc_info:
+            validate_tckn("10000000140", raise_exception=True)
+        assert exc_info.value.code == "invalid_checksum"
+
     def test_whitespace_handling(self):
         """Test that whitespace is stripped."""
         assert validate_tckn(" 10000000146 ") is True
@@ -87,6 +112,19 @@ class TestValidateIBANTR:
             validate_iban_tr("TR123", raise_exception=True)
         assert exc_info.value.code == "invalid_length"
 
+    def test_raise_exception_invalid_country(self):
+        """Test raising exception for non-Turkish IBAN."""
+        # Use an IBAN with correct length (26 chars) but wrong country code
+        with pytest.raises(ValidationError) as exc_info:
+            validate_iban_tr("DE330006100519786457841326", raise_exception=True)
+        assert exc_info.value.code == "invalid_country"
+
+    def test_raise_exception_invalid_format(self):
+        """Test raising exception for IBAN with non-digits."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_iban_tr("TR33000610051978645784132A", raise_exception=True)
+        assert exc_info.value.code == "invalid_format"
+
     def test_case_insensitive(self):
         """Test case insensitivity."""
         assert validate_iban_tr("tr330006100519786457841326") is True
@@ -122,6 +160,12 @@ class TestValidateVKN:
             validate_vkn("123", raise_exception=True)
         assert exc_info.value.code == "invalid_length"
 
+    def test_raise_exception_invalid_format(self):
+        """Test raising exception for non-digit VKN."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_vkn("123456789a", raise_exception=True)
+        assert exc_info.value.code == "invalid_format"
+
 
 class TestValidatePhoneTR:
     """Tests for Turkish phone number validation."""
@@ -146,6 +190,12 @@ class TestValidatePhoneTR:
         with pytest.raises(ValidationError) as exc_info:
             validate_phone_tr("123", raise_exception=True)
         assert exc_info.value.code == "invalid_length"
+
+    def test_raise_exception_invalid_prefix(self):
+        """Test raising exception for invalid prefix."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_phone_tr("4551234567", raise_exception=True)
+        assert exc_info.value.code == "invalid_prefix"
 
 
 class TestFormatPhone:
