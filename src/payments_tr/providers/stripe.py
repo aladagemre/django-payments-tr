@@ -219,7 +219,7 @@ class StripeAdapter(PaymentProvider):
                 "payment_intent": provider_payment_id,
             }
 
-            if amount:
+            if amount is not None:
                 refund_params["amount"] = amount
 
             # Map reason to Stripe's accepted values
