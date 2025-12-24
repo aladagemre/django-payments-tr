@@ -164,11 +164,14 @@ class AbstractWebhookEvent(models.Model):
 
     def mark_failed(self, error_message: str) -> None:
         """Mark webhook processing as failed."""
+        from django.db.models import F
+
         self.processed = True
         self.success = False
         self.error_message = error_message
         self.processing_completed_at = timezone.now()
-        self.retry_count += 1
+        # Use F() expression for atomic increment to avoid race conditions
+        self.retry_count = F('retry_count') + 1
         self.save(
             update_fields=[
                 "processed",
@@ -178,6 +181,8 @@ class AbstractWebhookEvent(models.Model):
                 "retry_count",
             ]
         )
+        # Refresh from database to get the updated retry_count value
+        self.refresh_from_db(fields=['retry_count'])
 
     def should_retry(self) -> bool:
         """Check if webhook should be retried."""
