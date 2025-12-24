@@ -333,3 +333,24 @@ class TestCheckAllProviders:
             results = checker.check_all_providers()
 
         assert isinstance(results, dict)
+
+    def test_check_all_providers_with_exception(self):
+        """Test check_all_providers handles provider loading exceptions."""
+        from payments_tr.health import HealthCheckResult
+
+        checker = ProviderHealthChecker()
+
+        # Mock ProviderRegistry class from where it's imported
+        with patch("payments_tr.providers.registry.ProviderRegistry") as MockRegistry:
+            mock_registry = Mock()
+            mock_registry.list_providers.return_value = ["failing_provider"]
+            mock_registry.get.side_effect = Exception("Provider load failed")
+            MockRegistry.return_value = mock_registry
+
+            results = checker.check_all_providers()
+
+        # Should have result for the failing provider
+        assert "failing_provider" in results
+        assert results["failing_provider"].healthy is False
+        assert "Failed to load provider" in results["failing_provider"].message
+        assert "Provider load failed" in results["failing_provider"].details["error"]
