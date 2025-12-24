@@ -59,7 +59,7 @@ class Command(BaseCommand):
             if not webhook_model_path:
                 raise CommandError(
                     "PAYMENTS_TR['WEBHOOK_MODEL'] not configured in settings. "
-                    "Set it to your webhook model path, e.g., 'myapp.models.WebhookEvent'"
+                    "Set it to your webhook model path, e.g., 'myapp.WebhookEvent'"
                 )
 
             # Import the model
