@@ -8,12 +8,12 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from payments_tr.config import (
+    SettingsValidator,
     ValidationError,
     ValidationResult,
-    SettingsValidator,
-    validate_settings,
-    get_setting,
     check_configuration,
+    get_setting,
+    validate_settings,
 )
 
 

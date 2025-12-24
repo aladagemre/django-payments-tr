@@ -78,9 +78,7 @@ class TestIyzicoWebhookVerifier:
     def test_verifier_init_from_settings(self):
         """Test initializing verifier from settings."""
         with patch("payments_tr.security.settings") as mock_settings:
-            mock_settings.PAYMENTS_TR = {
-                "SECURITY": {"IYZICO_WEBHOOK_SECRET": "settings_secret"}
-            }
+            mock_settings.PAYMENTS_TR = {"SECURITY": {"IYZICO_WEBHOOK_SECRET": "settings_secret"}}
             verifier = IyzicoWebhookVerifier()
             assert verifier.secret == "settings_secret"
 
@@ -103,9 +101,7 @@ class TestIyzicoWebhookVerifier:
         assert len(signature) == 64  # SHA256 hex digest
 
         # Verify signature is correct
-        expected = hmac.new(
-            b"test_secret", payload, hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(b"test_secret", payload, hashlib.sha256).hexdigest()
         assert signature == expected
 
     def test_compute_signature_no_secret(self):
@@ -121,9 +117,7 @@ class TestIyzicoWebhookVerifier:
         payload = b"test payload"
 
         # Generate valid signature
-        signature = hmac.new(
-            secret.encode("utf-8"), payload, hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
         assert verifier.verify(payload, signature) is True
 
@@ -273,9 +267,9 @@ class TestRateLimiter:
 
         requests = [
             current_time - 120,  # 2 minutes ago (outside window)
-            current_time - 90,   # 1.5 minutes ago (outside window)
-            current_time - 30,   # 30 seconds ago (inside window)
-            current_time - 10,   # 10 seconds ago (inside window)
+            current_time - 90,  # 1.5 minutes ago (outside window)
+            current_time - 30,  # 30 seconds ago (inside window)
+            current_time - 10,  # 10 seconds ago (inside window)
         ]
 
         cleaned = limiter._clean_old_requests(requests, current_time)

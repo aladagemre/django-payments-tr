@@ -125,9 +125,7 @@ class TestProviderHealthChecker:
         provider.create_payment = Mock(side_effect=Exception("Test error"))
 
         # Patch _check_generic to raise exception
-        with patch.object(
-            checker, "_check_generic", side_effect=Exception("Health check failed")
-        ):
+        with patch.object(checker, "_check_generic", side_effect=Exception("Health check failed")):
             result = checker.check_provider(provider)
 
         assert result.healthy is False
@@ -278,8 +276,15 @@ class TestCheckGeneric:
         """Test generic check with one missing method."""
         checker = ProviderHealthChecker()
         # Use spec to control which methods exist
-        provider = Mock(spec=["provider_name", "create_payment", "confirm_payment",
-                               "create_refund", "handle_webhook"])
+        provider = Mock(
+            spec=[
+                "provider_name",
+                "create_payment",
+                "confirm_payment",
+                "create_refund",
+                "handle_webhook",
+            ]
+        )
         provider.provider_name = "custom"
 
         result = checker._check_generic(provider, test_mode=True)
@@ -307,8 +312,15 @@ class TestCheckGeneric:
     def test_check_generic_no_provider_name(self):
         """Test generic check without provider name."""
         checker = ProviderHealthChecker()
-        provider = Mock(spec=["create_payment", "confirm_payment", "create_refund",
-                               "handle_webhook", "get_payment_status"])
+        provider = Mock(
+            spec=[
+                "create_payment",
+                "confirm_payment",
+                "create_refund",
+                "handle_webhook",
+                "get_payment_status",
+            ]
+        )
 
         result = checker._check_generic(provider, test_mode=False)
 

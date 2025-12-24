@@ -310,9 +310,7 @@ class TestIyzicoEdgeCases:
         assert result.success is False
         assert result.error_code == "CUSTOM_ERROR_CODE"
 
-    def test_confirm_payment_exception_without_error_code(
-        self, iyzico_adapter, mock_iyzico_client
-    ):
+    def test_confirm_payment_exception_without_error_code(self, iyzico_adapter, mock_iyzico_client):
         """Test confirm_payment uses default error_code when not provided."""
         mock_iyzico_client.retrieve_checkout_form = MagicMock(
             side_effect=Exception("Generic error")
@@ -359,9 +357,7 @@ class TestIyzicoEdgeCases:
         # First item should have payment amount
         assert basket_items[0]["price"] == str(mock_payment.amount / 100)
 
-    def test_build_checkout_request_with_custom_basket_items(
-        self, iyzico_adapter, mock_payment
-    ):
+    def test_build_checkout_request_with_custom_basket_items(self, iyzico_adapter, mock_payment):
         """Test _build_checkout_request uses provided basket_items."""
         buyer_info = BuyerInfo(
             email="test@example.com",

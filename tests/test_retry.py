@@ -7,9 +7,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from payments_tr.retry import (
+    RetryableOperation,
     RetryAttempt,
     RetryConfig,
-    RetryableOperation,
     async_retry_with_backoff,
     retry_with_backoff,
 )
@@ -513,6 +513,7 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_delay_timing(self):
         """Test that async retry delays are applied."""
+
         # Create a properly awaitable mock
         async def mock_async_sleep(delay):
             pass
