@@ -68,6 +68,7 @@ class MockPaymentProvider(PaymentProvider):
         self.calls = []
         self._next_result = None
         self._should_fail = False
+        self._failure_message = "Mock payment failed"
 
     def create_payment(
         self,

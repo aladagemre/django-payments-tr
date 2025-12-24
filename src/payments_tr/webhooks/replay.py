@@ -250,7 +250,8 @@ class WebhookReplayer:
 
         if exponential_backoff:
             # Exponential backoff: 60s, 120s, 240s, 480s, etc.
-            delay = 60 * (2 ** event.retry_count)
+            # Use retry_count as the exponent (0-indexed for first retry)
+            delay = 60 * (2 ** (event.retry_count - 1)) if event.retry_count > 0 else 60
         else:
             # Fixed delay of 60 seconds
             delay = 60
