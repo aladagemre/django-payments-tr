@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone as django_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -326,7 +327,7 @@ class AuditLogger:
     ) -> None:
         """Log a refund operation."""
         entry = AuditLogEntry(
-            timestamp=datetime.now(),
+            timestamp=django_timezone.now(),
             operation="refund",
             user=user,
             payment_id=payment_id,
@@ -349,7 +350,7 @@ class AuditLogger:
         """Log an EFT approval/rejection."""
         operation = "eft_approve" if approved else "eft_reject"
         entry = AuditLogEntry(
-            timestamp=datetime.now(),
+            timestamp=django_timezone.now(),
             operation=operation,
             user=user,
             payment_id=payment_id,
@@ -370,7 +371,7 @@ class AuditLogger:
     ) -> None:
         """Log webhook processing."""
         entry = AuditLogEntry(
-            timestamp=datetime.now(),
+            timestamp=django_timezone.now(),
             operation="webhook",
             user="system",
             payment_id=payment_id,
@@ -442,7 +443,7 @@ class IdempotencyManager:
             # Fallback to in-memory storage
             with self._lock:
                 # Clean old entries
-                cutoff = datetime.now() - timedelta(seconds=self.ttl)
+                cutoff = django_timezone.now() - timedelta(seconds=self.ttl)
                 self._memory_store = {
                     k: v for k, v in self._memory_store.items() if v > cutoff
                 }
@@ -467,7 +468,7 @@ class IdempotencyManager:
             pass
 
         with self._lock:
-            self._memory_store[idempotency_key] = datetime.now()
+            self._memory_store[idempotency_key] = django_timezone.now()
 
 
 # Decorator for idempotent operations

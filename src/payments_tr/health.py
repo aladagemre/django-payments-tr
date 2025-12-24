@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from django.utils import timezone as django_timezone
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +71,7 @@ class ProviderHealthChecker:
 
         provider_name = getattr(provider, "provider_name", "unknown")
         start_time = time.time()
-        checked_at = datetime.now()
+        checked_at = django_timezone.now()
 
         try:
             # Check basic configuration
@@ -116,7 +118,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message="Invalid provider type",
                 details={},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
         try:
@@ -130,7 +132,7 @@ class ProviderHealthChecker:
                     healthy=False,
                     message="Stripe API key not configured",
                     details={},
-                    checked_at=datetime.now(),
+                    checked_at=django_timezone.now(),
                 )
 
             # Check if using test key in test mode
@@ -141,7 +143,7 @@ class ProviderHealthChecker:
                     healthy=False,
                     message="Not using test API key in test mode",
                     details={"test_mode": test_mode, "is_test_key": is_test_key},
-                    checked_at=datetime.now(),
+                    checked_at=django_timezone.now(),
                 )
 
             # Try a simple API call (list payment methods)
@@ -153,7 +155,7 @@ class ProviderHealthChecker:
                     healthy=False,
                     message="Stripe API authentication failed",
                     details={"test_mode": test_mode},
-                    checked_at=datetime.now(),
+                    checked_at=django_timezone.now(),
                 )
 
             return HealthCheckResult(
@@ -161,7 +163,7 @@ class ProviderHealthChecker:
                 healthy=True,
                 message="Stripe provider healthy",
                 details={"test_mode": test_mode, "is_test_key": is_test_key},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
         except ImportError:
@@ -170,7 +172,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message="Stripe package not installed",
                 details={},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
         except Exception as e:
             return HealthCheckResult(
@@ -178,7 +180,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message=f"Stripe health check failed: {str(e)}",
                 details={"error": str(e)},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
     def _check_iyzico(self, provider: Any, test_mode: bool) -> HealthCheckResult:
@@ -191,7 +193,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message="Invalid provider type",
                 details={},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
         try:
@@ -202,7 +204,7 @@ class ProviderHealthChecker:
                     healthy=False,
                     message="iyzico client not initialized",
                     details={},
-                    checked_at=datetime.now(),
+                    checked_at=django_timezone.now(),
                 )
 
             # Basic configuration check
@@ -211,7 +213,7 @@ class ProviderHealthChecker:
                 healthy=True,
                 message="iyzico provider configured",
                 details={"test_mode": test_mode},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
         except ImportError:
@@ -220,7 +222,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message="django-iyzico package not installed",
                 details={},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
         except Exception as e:
             return HealthCheckResult(
@@ -228,7 +230,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message=f"iyzico health check failed: {str(e)}",
                 details={"error": str(e)},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
     def _check_generic(self, provider: Any, test_mode: bool) -> HealthCheckResult:
@@ -254,7 +256,7 @@ class ProviderHealthChecker:
                 healthy=False,
                 message=f"Missing required methods: {', '.join(missing_methods)}",
                 details={"missing_methods": missing_methods},
-                checked_at=datetime.now(),
+                checked_at=django_timezone.now(),
             )
 
         return HealthCheckResult(
@@ -262,7 +264,7 @@ class ProviderHealthChecker:
             healthy=True,
             message="Provider has required methods",
             details={"test_mode": test_mode},
-            checked_at=datetime.now(),
+            checked_at=django_timezone.now(),
         )
 
     def check_all_providers(
@@ -300,7 +302,7 @@ class ProviderHealthChecker:
                     healthy=False,
                     message=f"Failed to load provider: {str(e)}",
                     details={"error": str(e)},
-                    checked_at=datetime.now(),
+                    checked_at=django_timezone.now(),
                 )
 
         return results
