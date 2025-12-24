@@ -136,7 +136,7 @@ class ProviderHealthChecker:
                 )
 
             # Check if using test key in test mode
-            is_test_key = api_key.startswith("sk_test_")
+            is_test_key = isinstance(api_key, str) and api_key.startswith("sk_test_")
             if test_mode and not is_test_key:
                 return HealthCheckResult(
                     provider="stripe",

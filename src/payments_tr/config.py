@@ -137,6 +137,8 @@ class SettingsValidator:
             api_key = self.settings["STRIPE_API_KEY"]
             if not api_key:
                 result.add_error("STRIPE_API_KEY", "Stripe API key is empty")
+            elif not isinstance(api_key, str):
+                result.add_error("STRIPE_API_KEY", "Stripe API key must be a string")
             elif not (api_key.startswith("sk_test_") or api_key.startswith("sk_live_")):
                 result.add_warning(
                     "STRIPE_API_KEY",
@@ -147,6 +149,8 @@ class SettingsValidator:
             secret = self.settings["STRIPE_WEBHOOK_SECRET"]
             if not secret:
                 result.add_error("STRIPE_WEBHOOK_SECRET", "Stripe webhook secret is empty")
+            elif not isinstance(secret, str):
+                result.add_error("STRIPE_WEBHOOK_SECRET", "Stripe webhook secret must be a string")
             elif not secret.startswith("whsec_"):
                 result.add_warning(
                     "STRIPE_WEBHOOK_SECRET",
