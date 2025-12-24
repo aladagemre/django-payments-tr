@@ -325,3 +325,84 @@ class TestStripeAdapter:
     def test_supports_subscriptions(self, stripe_adapter):
         """Test supports_subscriptions returns True."""
         assert stripe_adapter.supports_subscriptions() is True
+
+
+class TestStripeAdapterInit:
+    """Tests for StripeAdapter initialization."""
+
+    def test_init_missing_api_key(self, caplog, mock_stripe):
+        """Test warning when Stripe API key not configured."""
+        import logging
+
+        caplog.set_level(logging.WARNING)
+
+        with patch.dict("sys.modules", {"stripe": mock_stripe}):
+            with patch("payments_tr.providers.stripe.settings") as mock_settings:
+                mock_settings.STRIPE_SECRET_KEY = ""  # Empty API key
+                mock_settings.STRIPE_WEBHOOK_SECRET = ""
+
+                from payments_tr.providers.stripe import StripeAdapter
+
+                adapter = StripeAdapter()
+
+                # Check warning was logged
+                assert "STRIPE_SECRET_KEY not configured" in caplog.text
+                assert adapter._stripe.api_key == ""
+
+    def test_init_with_api_key(self, mock_stripe):
+        """Test successful initialization with API key."""
+        with patch.dict("sys.modules", {"stripe": mock_stripe}):
+            with patch("payments_tr.providers.stripe.settings") as mock_settings:
+                mock_settings.STRIPE_SECRET_KEY = "sk_test_123"
+                mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_123"
+
+                from payments_tr.providers.stripe import StripeAdapter
+
+                adapter = StripeAdapter()
+
+                assert adapter._stripe.api_key == "sk_test_123"
+                assert adapter._webhook_secret == "whsec_123"
+
+
+class TestStripeWebhookEdgeCases:
+    """Tests for Stripe webhook edge cases."""
+
+    def test_webhook_payment_id_non_integer_string(self, stripe_adapter, mock_stripe):
+        """Test webhook with non-integer payment_id in metadata."""
+        mock_event = {
+            "type": "payment_intent.succeeded",
+            "data": {
+                "object": {
+                    "id": "pi_123",
+                    "status": "succeeded",
+                    "metadata": {"payment_id": "abc123"},  # Non-integer string
+                }
+            },
+        }
+        mock_stripe.Webhook.construct_event.return_value = mock_event
+
+        result = stripe_adapter.handle_webhook(b"payload", signature="sig_123")
+
+        assert result.success is True
+        # Should keep as string when ValueError occurs
+        assert result.payment_id == "abc123"
+
+    def test_webhook_payment_id_none(self, stripe_adapter, mock_stripe):
+        """Test webhook with None payment_id in metadata."""
+        mock_event = {
+            "type": "payment_intent.succeeded",
+            "data": {
+                "object": {
+                    "id": "pi_123",
+                    "status": "succeeded",
+                    "metadata": {"payment_id": None},  # None value
+                }
+            },
+        }
+        mock_stripe.Webhook.construct_event.return_value = mock_event
+
+        result = stripe_adapter.handle_webhook(b"payload", signature="sig_123")
+
+        assert result.success is True
+        # Should keep as None when TypeError occurs
+        assert result.payment_id is None

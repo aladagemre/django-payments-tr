@@ -209,3 +209,69 @@ class TestProviderRegistry:
         registry.register("TEST", TestProvider)
         assert registry.is_registered("test")
         assert registry.is_registered("TEST")
+
+    def test_get_provider_instance(self, caplog):
+        """Test getting provider instance."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        class TestProvider(PaymentProvider):
+            provider_name = "test"
+
+            def create_payment(self, payment, **kwargs):
+                return PaymentResult(success=True)
+
+            def confirm_payment(self, provider_payment_id):
+                return PaymentResult(success=True)
+
+            def create_refund(self, payment, amount=None, reason="", **kwargs):
+                return RefundResult(success=True)
+
+            def handle_webhook(self, payload, signature=None, **kwargs):
+                return WebhookResult(success=True)
+
+            def get_payment_status(self, provider_payment_id):
+                return "succeeded"
+
+        registry.register("test", TestProvider)
+        provider = registry.get("test")
+        assert isinstance(provider, TestProvider)
+        assert "using payment provider" in caplog.text.lower()
+
+    def test_get_class(self):
+        """Test getting provider class without instantiation."""
+
+        class TestProvider(PaymentProvider):
+            provider_name = "test"
+
+            def create_payment(self, payment, **kwargs):
+                pass
+
+            def confirm_payment(self, provider_payment_id):
+                pass
+
+            def create_refund(self, payment, amount=None, reason="", **kwargs):
+                pass
+
+            def handle_webhook(self, payload, signature=None, **kwargs):
+                pass
+
+            def get_payment_status(self, provider_payment_id):
+                pass
+
+        registry.register("test", TestProvider)
+        provider_class = registry.get_class("test")
+        assert provider_class is TestProvider
+        assert not isinstance(provider_class, PaymentProvider)  # Not instantiated
+
+    def test_get_class_unknown(self):
+        """Test getting unknown provider class raises error."""
+        with pytest.raises(ValueError) as exc_info:
+            registry.get_class("unknown")
+        assert "Unknown payment provider" in str(exc_info.value)
+
+    def test_unregister_nonexistent(self):
+        """Test unregistering non-existent provider doesn't raise error."""
+        # Should not raise
+        registry.unregister("nonexistent")

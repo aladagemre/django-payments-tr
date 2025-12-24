@@ -6,8 +6,32 @@ This package provides:
 - Turkey-specific utilities (KDV/VAT, TCKN validation, IBAN validation)
 - EFT payment workflow with admin approval
 - Commission calculation utilities
+- Security features (webhook verification, rate limiting, audit logging)
+- Payment signals for lifecycle events
+- Async/await support for providers
+- Retry logic with exponential backoff
+- Comprehensive logging and monitoring
+- Testing utilities and mocks
 """
 
+# Configuration and validation
+from payments_tr.config import (
+    check_configuration,
+    get_setting,
+    validate_settings,
+)
+
+# Health checks
+from payments_tr.health import (
+    HealthCheckResult,
+    ProviderHealthChecker,
+)
+
+# Logging
+from payments_tr.logging_config import (
+    configure_logging,
+    get_logger,
+)
 from payments_tr.providers import (
     BuyerInfo,
     PaymentProvider,
@@ -17,6 +41,26 @@ from payments_tr.providers import (
     get_payment_provider,
     get_provider_name,
     register_provider,
+)
+
+# Async support
+from payments_tr.providers.async_base import (
+    AsyncPaymentProvider,
+    get_async_payment_provider,
+)
+
+# Retry utilities
+from payments_tr.retry import (
+    RetryableOperation,
+    retry_with_backoff,
+)
+
+# Security
+from payments_tr.security import (
+    AuditLogger,
+    IdempotencyManager,
+    IyzicoWebhookVerifier,
+    RateLimiter,
 )
 
 __version__ = "0.1.0"
@@ -33,4 +77,25 @@ __all__ = [
     "get_payment_provider",
     "get_provider_name",
     "register_provider",
+    # Async support
+    "AsyncPaymentProvider",
+    "get_async_payment_provider",
+    # Configuration
+    "validate_settings",
+    "get_setting",
+    "check_configuration",
+    # Security
+    "IyzicoWebhookVerifier",
+    "RateLimiter",
+    "AuditLogger",
+    "IdempotencyManager",
+    # Retry
+    "retry_with_backoff",
+    "RetryableOperation",
+    # Logging
+    "configure_logging",
+    "get_logger",
+    # Health checks
+    "ProviderHealthChecker",
+    "HealthCheckResult",
 ]

@@ -128,7 +128,8 @@ class ProviderRegistry:
 
     def _get_default_name(self) -> str:
         """Get the default provider name from settings."""
-        return getattr(settings, "PAYMENT_PROVIDER", "stripe")
+        payments_settings = getattr(settings, "PAYMENTS_TR", {})
+        return payments_settings.get("DEFAULT_PROVIDER", "stripe")
 
     def clear(self) -> None:
         """Clear all registered providers (useful for testing)."""
@@ -188,7 +189,12 @@ def get_provider_name() -> str:
     Returns:
         Provider name string (e.g., "stripe" or "iyzico")
     """
-    return getattr(settings, "PAYMENT_PROVIDER", "stripe").lower()
+    payments_settings = getattr(settings, "PAYMENTS_TR", {})
+    provider = payments_settings.get("DEFAULT_PROVIDER", "stripe")
+    # Ensure provider is a string to avoid AttributeError on .lower()
+    if not isinstance(provider, str):
+        return "stripe"
+    return provider.lower()
 
 
 def register_provider(name: str, provider_class: type[PaymentProvider]) -> None:
