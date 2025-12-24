@@ -8,6 +8,8 @@ transaction management, signal dispatching, audit logging, and error handling.
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 import logging
 from typing import Any, Callable, TypeVar
 
@@ -244,8 +246,21 @@ def cache_provider_result(ttl: int = 300):
         def wrapper(*args, **kwargs):
             from django.core.cache import cache
 
-            # Generate cache key
-            cache_key = f"payments_tr:{func.__name__}:{args}:{kwargs}"
+            # Generate deterministic cache key
+            # Convert args and kwargs to a JSON string, then hash it
+            try:
+                # Create a deterministic representation of arguments
+                cache_data = {
+                    "args": [str(arg) for arg in args],
+                    "kwargs": {k: str(v) for k, v in sorted(kwargs.items())},
+                }
+                cache_json = json.dumps(cache_data, sort_keys=True)
+                cache_hash = hashlib.md5(cache_json.encode()).hexdigest()
+                cache_key = f"payments_tr:{func.__name__}:{cache_hash}"
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Failed to generate cache key for {func.__name__}: {e}")
+                # Fall back to executing without cache
+                return func(*args, **kwargs)
 
             # Try to get from cache
             result = cache.get(cache_key)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import random
 import time
 from typing import Any, Callable, TypeVar
 
@@ -59,8 +60,6 @@ class RetryConfig:
         )
 
         if self.jitter:
-            import random
-
             delay = delay * (0.5 + random.random())
 
         return delay
