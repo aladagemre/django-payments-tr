@@ -485,10 +485,12 @@ def idempotent(key_func: Callable[[Any], str]):
         ...     # Process webhook
         ...     pass
     """
+    from functools import wraps
 
     def decorator(func: Callable) -> Callable:
         manager = IdempotencyManager()
 
+        @wraps(func)
         def wrapper(*args, **kwargs):
             key = key_func(*args, **kwargs)
             if not manager.check(key):
