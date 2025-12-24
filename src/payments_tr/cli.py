@@ -72,7 +72,7 @@ def test_payment(args: Any) -> int:
         _setup_django()
 
         from payments_tr.providers.registry import get_payment_provider
-        from payments_tr.testing.utils import create_test_payment, create_test_buyer_info
+        from payments_tr.testing.utils import create_test_buyer_info, create_test_payment
 
         provider_name = args.provider or "default"
         amount = args.amount or 1000
