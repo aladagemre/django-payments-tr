@@ -190,7 +190,11 @@ def get_provider_name() -> str:
         Provider name string (e.g., "stripe" or "iyzico")
     """
     payments_settings = getattr(settings, "PAYMENTS_TR", {})
-    return payments_settings.get("DEFAULT_PROVIDER", "stripe").lower()
+    provider = payments_settings.get("DEFAULT_PROVIDER", "stripe")
+    # Ensure provider is a string to avoid AttributeError on .lower()
+    if not isinstance(provider, str):
+        return "stripe"
+    return provider.lower()
 
 
 def register_provider(name: str, provider_class: type[PaymentProvider]) -> None:
