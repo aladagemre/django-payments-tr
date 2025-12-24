@@ -405,26 +405,23 @@ class IyzicoAdapter(PaymentProvider):
         if hasattr(payment, "client"):
             client = payment.client
             user = getattr(client, "user", client)
+
+            # Parse name safely
+            full_name = getattr(user, "name", "").strip()
+            name_parts = full_name.split() if full_name else []
+
             return BuyerInfo(
                 id=str(getattr(client, "id", "")),
                 email=getattr(user, "email", ""),
                 name=getattr(
                     user,
                     "first_name",
-                    (
-                        getattr(user, "name", "").split()[0]
-                        if getattr(user, "name", "")
-                        else "Customer"
-                    ),
+                    name_parts[0] if name_parts else "Customer",
                 ),
                 surname=getattr(
                     user,
                     "last_name",
-                    (
-                        getattr(user, "name", "").split()[-1]
-                        if len(getattr(user, "name", "").split()) > 1
-                        else "Customer"
-                    ),
+                    name_parts[-1] if len(name_parts) > 1 else "Customer",
                 ),
                 phone=getattr(client, "phone", ""),
             )

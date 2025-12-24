@@ -186,15 +186,12 @@ def log_payment_operation(
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            from payments_tr.logging_config import get_logger
-
-            payment_logger = get_logger()
-            operation_name = func.__name__
-
             # Extract payment info if available
             payment = args[0] if args else None
             payment_id = getattr(payment, "id", None)
             provider = getattr(args[1], "provider_name", None) if len(args) > 1 else None
+
+            operation_name = func.__name__
 
             if log_start:
                 logger.info(
