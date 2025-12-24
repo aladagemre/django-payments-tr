@@ -301,3 +301,252 @@ class TestCustomEFTService:
 
         assert approved_payments == [101]
         assert rejected_payments == [(102, "Bad receipt")]
+
+
+@pytest.mark.django_db
+class TestEFTPaymentFieldsMixin:
+    """Tests for EFTPaymentFieldsMixin properties and methods."""
+
+    @pytest.fixture
+    def mock_user(self):
+        """Create mock user."""
+        user = MagicMock()
+        user.id = 1
+        user.username = "testuser"
+        return user
+
+    def test_is_eft_pending_with_reference(self, mock_user):
+        """Test is_eft_pending returns True when payment has reference but no approval."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        # Create a simple object with the mixin attributes
+        payment = type(
+            "TestPayment",
+            (),
+            {
+                "eft_reference_number": "REF123",
+                "approved_at": None,
+                "rejected_at": None,
+            },
+        )()
+
+        # Manually bind the property
+        result = EFTPaymentFieldsMixin.is_eft_pending.fget(payment)
+        assert result is True
+
+    def test_is_eft_pending_without_reference(self):
+        """Test is_eft_pending returns False when no reference number."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type(
+            "TestPayment",
+            (),
+            {
+                "eft_reference_number": None,
+                "approved_at": None,
+                "rejected_at": None,
+            },
+        )()
+
+        result = EFTPaymentFieldsMixin.is_eft_pending.fget(payment)
+        assert result is False
+
+    def test_is_eft_pending_when_approved(self):
+        """Test is_eft_pending returns False when already approved."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type(
+            "TestPayment",
+            (),
+            {
+                "eft_reference_number": "REF123",
+                "approved_at": timezone.now(),
+                "rejected_at": None,
+            },
+        )()
+
+        result = EFTPaymentFieldsMixin.is_eft_pending.fget(payment)
+        assert result is False
+
+    def test_is_eft_approved_true(self):
+        """Test is_eft_approved returns True when approved_at is set."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type("TestPayment", (), {"approved_at": timezone.now()})()
+        result = EFTPaymentFieldsMixin.is_eft_approved.fget(payment)
+        assert result is True
+
+    def test_is_eft_approved_false(self):
+        """Test is_eft_approved returns False when approved_at is None."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type("TestPayment", (), {"approved_at": None})()
+        result = EFTPaymentFieldsMixin.is_eft_approved.fget(payment)
+        assert result is False
+
+    def test_is_eft_rejected_true(self):
+        """Test is_eft_rejected returns True when rejected_at is set."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type("TestPayment", (), {"rejected_at": timezone.now()})()
+        result = EFTPaymentFieldsMixin.is_eft_rejected.fget(payment)
+        assert result is True
+
+    def test_is_eft_rejected_false(self):
+        """Test is_eft_rejected returns False when rejected_at is None."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        payment = type("TestPayment", (), {"rejected_at": None})()
+        result = EFTPaymentFieldsMixin.is_eft_rejected.fget(payment)
+        assert result is False
+
+    def test_eft_status_approved(self):
+        """Test eft_status returns APPROVED when payment is approved."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        # Create class with all necessary properties
+        class TestPayment:
+            approved_at = timezone.now()
+            rejected_at = None
+            is_eft_approved = EFTPaymentFieldsMixin.is_eft_approved
+            is_eft_rejected = EFTPaymentFieldsMixin.is_eft_rejected
+
+        payment = TestPayment()
+        result = EFTPaymentFieldsMixin.eft_status.fget(payment)
+        assert result == EFTStatus.APPROVED
+
+    def test_eft_status_rejected(self):
+        """Test eft_status returns REJECTED when payment is rejected."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        # Create class with all necessary properties
+        class TestPayment:
+            approved_at = None
+            rejected_at = timezone.now()
+            is_eft_approved = EFTPaymentFieldsMixin.is_eft_approved
+            is_eft_rejected = EFTPaymentFieldsMixin.is_eft_rejected
+
+        payment = TestPayment()
+        result = EFTPaymentFieldsMixin.eft_status.fget(payment)
+        assert result == EFTStatus.REJECTED
+
+    def test_eft_status_pending(self):
+        """Test eft_status returns PENDING when neither approved nor rejected."""
+        from payments_tr.eft.models import EFTPaymentFieldsMixin
+
+        # Create class with all necessary properties
+        class TestPayment:
+            approved_at = None
+            rejected_at = None
+            is_eft_approved = EFTPaymentFieldsMixin.is_eft_approved
+            is_eft_rejected = EFTPaymentFieldsMixin.is_eft_rejected
+
+        payment = TestPayment()
+        result = EFTPaymentFieldsMixin.eft_status.fget(payment)
+        assert result == EFTStatus.PENDING
+
+
+@pytest.mark.django_db
+class TestAbstractEFTPayment:
+    """Tests for AbstractEFTPayment approve() and reject() methods."""
+
+    @pytest.fixture
+    def mock_user(self):
+        """Create mock user."""
+        user = MagicMock()
+        user.id = 1
+        user.username = "testuser"
+        return user
+
+    def test_approve_with_save_true(self, mock_user):
+        """Test approve() method with save=True."""
+        from payments_tr.eft.models import AbstractEFTPayment
+
+        # Create a mock payment instance
+        payment = MagicMock(spec=AbstractEFTPayment)
+        payment.save = MagicMock()
+
+        # Call the actual approve method
+        AbstractEFTPayment.approve(payment, mock_user, save=True)
+
+        # Verify attributes were set
+        assert payment.approved_by == mock_user
+        assert payment.approved_at is not None
+        assert payment.rejected_by is None
+        assert payment.rejected_at is None
+        assert payment.rejection_reason == ""
+
+        # Verify save was called with correct fields
+        payment.save.assert_called_once()
+        call_kwargs = payment.save.call_args[1]
+        assert "update_fields" in call_kwargs
+        assert "approved_by" in call_kwargs["update_fields"]
+        assert "approved_at" in call_kwargs["update_fields"]
+
+    def test_approve_with_save_false(self, mock_user):
+        """Test approve() method with save=False."""
+        from payments_tr.eft.models import AbstractEFTPayment
+
+        payment = MagicMock(spec=AbstractEFTPayment)
+        payment.save = MagicMock()
+
+        AbstractEFTPayment.approve(payment, mock_user, save=False)
+
+        # Verify attributes were set
+        assert payment.approved_by == mock_user
+        assert payment.approved_at is not None
+
+        # Verify save was NOT called
+        payment.save.assert_not_called()
+
+    def test_reject_with_save_true(self, mock_user):
+        """Test reject() method with save=True."""
+        from payments_tr.eft.models import AbstractEFTPayment
+
+        payment = MagicMock(spec=AbstractEFTPayment)
+        payment.save = MagicMock()
+
+        AbstractEFTPayment.reject(payment, mock_user, reason="Invalid receipt", save=True)
+
+        # Verify attributes were set
+        assert payment.rejected_by == mock_user
+        assert payment.rejected_at is not None
+        assert payment.rejection_reason == "Invalid receipt"
+        assert payment.approved_by is None
+        assert payment.approved_at is None
+
+        # Verify save was called with correct fields
+        payment.save.assert_called_once()
+        call_kwargs = payment.save.call_args[1]
+        assert "update_fields" in call_kwargs
+        assert "rejected_by" in call_kwargs["update_fields"]
+        assert "rejected_at" in call_kwargs["update_fields"]
+        assert "rejection_reason" in call_kwargs["update_fields"]
+
+    def test_reject_with_save_false(self, mock_user):
+        """Test reject() method with save=False."""
+        from payments_tr.eft.models import AbstractEFTPayment
+
+        payment = MagicMock(spec=AbstractEFTPayment)
+        payment.save = MagicMock()
+
+        AbstractEFTPayment.reject(payment, mock_user, reason="Test reason", save=False)
+
+        # Verify attributes were set
+        assert payment.rejected_by == mock_user
+        assert payment.rejection_reason == "Test reason"
+
+        # Verify save was NOT called
+        payment.save.assert_not_called()
+
+    def test_reject_without_reason(self, mock_user):
+        """Test reject() method without reason."""
+        from payments_tr.eft.models import AbstractEFTPayment
+
+        payment = MagicMock(spec=AbstractEFTPayment)
+        payment.save = MagicMock()
+
+        AbstractEFTPayment.reject(payment, mock_user, reason="", save=True)
+
+        assert payment.rejection_reason == ""
+        payment.save.assert_called_once()
