@@ -214,7 +214,12 @@ class SettingsValidator:
         if "LEVEL" in logging_config:
             level = logging_config["LEVEL"]
             valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-            if level.upper() not in valid_levels:
+            if not isinstance(level, str):
+                result.add_error(
+                    "LOGGING.LEVEL",
+                    f"Log level must be a string, got {type(level).__name__}",
+                )
+            elif level.upper() not in valid_levels:
                 result.add_error(
                     "LOGGING.LEVEL",
                     f"Invalid log level '{level}'. Valid levels: {', '.join(valid_levels)}",
