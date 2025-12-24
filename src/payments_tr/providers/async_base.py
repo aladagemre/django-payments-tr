@@ -28,7 +28,7 @@ def run_sync_in_thread(func):
 
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
     return wrapper
@@ -192,7 +192,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
         **kwargs: Any,
     ) -> PaymentResult:
         """Create payment in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.sync_provider.create_payment(
@@ -206,7 +206,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
 
     async def confirm_payment_async(self, provider_payment_id: str) -> PaymentResult:
         """Confirm payment in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, lambda: self.sync_provider.confirm_payment(provider_payment_id)
         )
@@ -219,7 +219,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
         **kwargs: Any,
     ) -> RefundResult:
         """Create refund in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.sync_provider.create_refund(
@@ -234,7 +234,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
         **kwargs: Any,
     ) -> WebhookResult:
         """Handle webhook in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.sync_provider.handle_webhook(
@@ -244,7 +244,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
 
     async def get_payment_status_async(self, provider_payment_id: str) -> str:
         """Get payment status in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, lambda: self.sync_provider.get_payment_status(provider_payment_id)
         )
