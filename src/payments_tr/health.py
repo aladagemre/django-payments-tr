@@ -246,9 +246,7 @@ class ProviderHealthChecker:
             "get_payment_status",
         ]
 
-        missing_methods = [
-            method for method in required_methods if not hasattr(provider, method)
-        ]
+        missing_methods = [method for method in required_methods if not hasattr(provider, method)]
 
         if missing_methods:
             return HealthCheckResult(
@@ -267,9 +265,7 @@ class ProviderHealthChecker:
             checked_at=django_timezone.now(),
         )
 
-    def check_all_providers(
-        self, test_mode: bool = True
-    ) -> dict[str, HealthCheckResult]:
+    def check_all_providers(self, test_mode: bool = True) -> dict[str, HealthCheckResult]:
         """
         Check health of all registered providers.
 

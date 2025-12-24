@@ -55,9 +55,7 @@ class RetryConfig:
         Returns:
             Delay in seconds
         """
-        delay = min(
-            self.initial_delay * (self.exponential_base**attempt), self.max_delay
-        )
+        delay = min(self.initial_delay * (self.exponential_base**attempt), self.max_delay)
 
         if self.jitter:
             delay = delay * (0.5 + random.random())
@@ -156,9 +154,7 @@ class RetryableOperation:
         jitter: bool = True,
     ):
         """Initialize retryable operation context."""
-        self.config = RetryConfig(
-            max_attempts, initial_delay, max_delay, exponential_base, jitter
-        )
+        self.config = RetryConfig(max_attempts, initial_delay, max_delay, exponential_base, jitter)
         self.current_attempt = 0
         self.last_exception: Exception | None = None
 
@@ -249,9 +245,7 @@ try:
             ...     provider = get_payment_provider()
             ...     return await provider.create_payment_async(payment)
         """
-        config = RetryConfig(
-            max_attempts, initial_delay, max_delay, exponential_base, jitter
-        )
+        config = RetryConfig(max_attempts, initial_delay, max_delay, exponential_base, jitter)
 
         def decorator(func: Callable[..., T]) -> Callable[..., T]:
             @functools.wraps(func)

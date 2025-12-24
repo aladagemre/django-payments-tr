@@ -37,9 +37,7 @@ class Command(BaseCommand):
             webhook_model_path = payments_settings.get("WEBHOOK_MODEL")
 
             if not webhook_model_path:
-                raise CommandError(
-                    "PAYMENTS_TR['WEBHOOK_MODEL'] not configured in settings."
-                )
+                raise CommandError("PAYMENTS_TR['WEBHOOK_MODEL'] not configured in settings.")
 
             app_label, model_name = webhook_model_path.rsplit(".", 1)
             from django.apps import apps
@@ -65,15 +63,11 @@ class Command(BaseCommand):
                 created_at__lt=cutoff, processed=True, success=True
             ).count()
 
-            self.stdout.write(
-                f"Would delete {count} webhook events older than {days} days"
-            )
+            self.stdout.write(f"Would delete {count} webhook events older than {days} days")
         else:
             # Actually delete
             count = replayer.cleanup_old_events(days=days)
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Deleted {count} webhook events older than {days} days"
-                )
+                self.style.SUCCESS(f"✓ Deleted {count} webhook events older than {days} days")
             )

@@ -52,9 +52,7 @@ class Command(BaseCommand):
                 result = checker.check_provider(provider, test_mode)
                 self._display_result(result, verbose)
             except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(f"Failed to check provider: {e}")
-                )
+                self.stdout.write(self.style.ERROR(f"Failed to check provider: {e}"))
         else:
             # Check all providers
             self.stdout.write("Checking all providers...")
@@ -75,18 +73,14 @@ class Command(BaseCommand):
             self.stdout.write(f"Total: {total} | Healthy: {healthy} | Unhealthy: {unhealthy}")
 
             if unhealthy > 0:
-                self.stdout.write(
-                    self.style.WARNING(f"{unhealthy} provider(s) are not healthy!")
-                )
+                self.stdout.write(self.style.WARNING(f"{unhealthy} provider(s) are not healthy!"))
 
     def _display_result(self, result, verbose):
         """Display health check result."""
         status_symbol = "✓" if result.healthy else "✗"
         status_style = self.style.SUCCESS if result.healthy else self.style.ERROR
 
-        self.stdout.write(
-            status_style(f"{status_symbol} {result.provider}: {result.message}")
-        )
+        self.stdout.write(status_style(f"{status_symbol} {result.provider}: {result.message}"))
 
         if verbose:
             if result.response_time_ms:

@@ -45,9 +45,7 @@ class AbstractWebhookEvent(models.Model):
     )
 
     # Webhook data
-    payload = models.JSONField(
-        help_text="Full webhook payload as JSON"
-    )
+    payload = models.JSONField(help_text="Full webhook payload as JSON")
     headers = models.JSONField(
         default=dict,
         blank=True,
@@ -158,9 +156,7 @@ class AbstractWebhookEvent(models.Model):
         self.processed = True
         self.success = True
         self.processing_completed_at = timezone.now()
-        self.save(
-            update_fields=["processed", "success", "processing_completed_at"]
-        )
+        self.save(update_fields=["processed", "success", "processing_completed_at"])
 
     def mark_failed(self, error_message: str) -> None:
         """Mark webhook processing as failed."""
@@ -171,7 +167,7 @@ class AbstractWebhookEvent(models.Model):
         self.error_message = error_message
         self.processing_completed_at = timezone.now()
         # Use F() expression for atomic increment to avoid race conditions
-        self.retry_count = F('retry_count') + 1
+        self.retry_count = F("retry_count") + 1
         self.save(
             update_fields=[
                 "processed",
@@ -182,7 +178,7 @@ class AbstractWebhookEvent(models.Model):
             ]
         )
         # Refresh from database to get the updated retry_count value
-        self.refresh_from_db(fields=['retry_count'])
+        self.refresh_from_db(fields=["retry_count"])
 
     def should_retry(self) -> bool:
         """Check if webhook should be retried."""
@@ -210,10 +206,7 @@ class AbstractWebhookEvent(models.Model):
     @property
     def is_processing(self) -> bool:
         """Check if webhook is currently being processed."""
-        return (
-            self.processing_started_at is not None
-            and self.processing_completed_at is None
-        )
+        return self.processing_started_at is not None and self.processing_completed_at is None
 
     @property
     def is_failed(self) -> bool:

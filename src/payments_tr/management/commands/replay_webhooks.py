@@ -81,9 +81,7 @@ class Command(BaseCommand):
             from payments_tr.providers.registry import get_payment_provider
 
             provider = get_payment_provider(event.provider)
-            result = provider.handle_webhook(
-                payload=event.payload, signature=event.signature
-            )
+            result = provider.handle_webhook(payload=event.payload, signature=event.signature)
             return result
 
         # Execute replay
@@ -136,9 +134,7 @@ class Command(BaseCommand):
             # Display results
             self.stdout.write("-" * 50)
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Successfully processed: {stats['success']}/{stats['total']}"
-                )
+                self.style.SUCCESS(f"✓ Successfully processed: {stats['success']}/{stats['total']}")
             )
 
             if stats["failed"] > 0:

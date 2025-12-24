@@ -112,9 +112,7 @@ class WebhookReplayer:
 
         # Filter by retry criteria
         now = timezone.now()
-        queryset = queryset.filter(
-            retry_count__lt=models.F("max_retries")
-        ).filter(
+        queryset = queryset.filter(retry_count__lt=models.F("max_retries")).filter(
             models.Q(next_retry_at__lte=now) | models.Q(next_retry_at__isnull=True)
         )
 

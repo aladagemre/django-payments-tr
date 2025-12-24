@@ -61,6 +61,7 @@ def check_health(args: Any) -> int:
         logger.error(f"Health check failed: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -118,6 +119,7 @@ def test_payment(args: Any) -> int:
         logger.error(f"Payment test failed: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -158,6 +160,7 @@ def validate_config(args: Any) -> int:
         logger.error(f"Validation failed: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -203,6 +206,7 @@ def list_providers(args: Any) -> int:
         logger.error(f"Failed to list providers: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -243,7 +247,8 @@ def main() -> int:
         prog="payments-tr",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )

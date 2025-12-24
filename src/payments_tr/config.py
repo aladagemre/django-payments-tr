@@ -113,9 +113,7 @@ class SettingsValidator:
 
         if raise_on_error and result.has_errors():
             error_messages = "\n".join(str(e) for e in result.errors)
-            raise ImproperlyConfigured(
-                f"PAYMENTS_TR settings validation failed:\n{error_messages}"
-            )
+            raise ImproperlyConfigured(f"PAYMENTS_TR settings validation failed:\n{error_messages}")
 
         return result
 

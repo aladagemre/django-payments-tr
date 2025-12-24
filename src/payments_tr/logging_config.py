@@ -59,8 +59,7 @@ class SensitiveDataFilter(logging.Filter):
                 redacted[key] = self._redact_dict(value)
             elif isinstance(value, list):
                 redacted[key] = [
-                    self._redact_dict(item) if isinstance(item, dict) else item
-                    for item in value
+                    self._redact_dict(item) if isinstance(item, dict) else item for item in value
                 ]
             else:
                 redacted[key] = value
@@ -375,6 +374,4 @@ def setup_django_logging() -> None:
     except Exception as e:
         # Fallback to basic configuration
         logging.basicConfig(level=logging.INFO)
-        logging.getLogger("payments_tr").warning(
-            f"Failed to configure logging from settings: {e}"
-        )
+        logging.getLogger("payments_tr").warning(f"Failed to configure logging from settings: {e}")

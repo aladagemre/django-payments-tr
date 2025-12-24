@@ -105,9 +105,7 @@ class IyzicoWebhookVerifier:
         if not self.secret:
             raise ValueError("Webhook secret not configured")
 
-        return hmac.new(
-            self.secret.encode("utf-8"), payload, hashlib.sha256
-        ).hexdigest()
+        return hmac.new(self.secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
     def verify(self, payload: bytes, signature: str) -> bool:
         """
@@ -444,9 +442,7 @@ class IdempotencyManager:
             with self._lock:
                 # Clean old entries
                 cutoff = django_timezone.now() - timedelta(seconds=self.ttl)
-                self._memory_store = {
-                    k: v for k, v in self._memory_store.items() if v > cutoff
-                }
+                self._memory_store = {k: v for k, v in self._memory_store.items() if v > cutoff}
 
                 if idempotency_key in self._memory_store:
                     logger.info(f"Idempotent operation detected: {idempotency_key}")

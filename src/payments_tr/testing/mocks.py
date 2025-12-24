@@ -52,7 +52,9 @@ class MockPaymentProvider(PaymentProvider):
         """
         self._next_result = result
 
-    def set_should_fail(self, should_fail: bool = True, message: str = "Mock payment failed") -> None:
+    def set_should_fail(
+        self, should_fail: bool = True, message: str = "Mock payment failed"
+    ) -> None:
         """
         Configure provider to fail on next operation.
 
@@ -80,14 +82,16 @@ class MockPaymentProvider(PaymentProvider):
         **kwargs: Any,
     ) -> PaymentResult:
         """Create a mock payment."""
-        self.calls.append({
-            "method": "create_payment",
-            "payment": payment,
-            "currency": currency,
-            "callback_url": callback_url,
-            "buyer_info": buyer_info,
-            "kwargs": kwargs,
-        })
+        self.calls.append(
+            {
+                "method": "create_payment",
+                "payment": payment,
+                "currency": currency,
+                "callback_url": callback_url,
+                "buyer_info": buyer_info,
+                "kwargs": kwargs,
+            }
+        )
 
         if self._should_fail:
             return PaymentResult(
@@ -111,10 +115,12 @@ class MockPaymentProvider(PaymentProvider):
 
     def confirm_payment(self, provider_payment_id: str) -> PaymentResult:
         """Confirm a mock payment."""
-        self.calls.append({
-            "method": "confirm_payment",
-            "provider_payment_id": provider_payment_id,
-        })
+        self.calls.append(
+            {
+                "method": "confirm_payment",
+                "provider_payment_id": provider_payment_id,
+            }
+        )
 
         if self._should_fail:
             return PaymentResult(
@@ -142,13 +148,15 @@ class MockPaymentProvider(PaymentProvider):
         **kwargs: Any,
     ) -> RefundResult:
         """Create a mock refund."""
-        self.calls.append({
-            "method": "create_refund",
-            "payment": payment,
-            "amount": amount,
-            "reason": reason,
-            "kwargs": kwargs,
-        })
+        self.calls.append(
+            {
+                "method": "create_refund",
+                "payment": payment,
+                "amount": amount,
+                "reason": reason,
+                "kwargs": kwargs,
+            }
+        )
 
         if self._should_fail:
             return RefundResult(
@@ -176,12 +184,14 @@ class MockPaymentProvider(PaymentProvider):
         **kwargs: Any,
     ) -> WebhookResult:
         """Handle a mock webhook."""
-        self.calls.append({
-            "method": "handle_webhook",
-            "payload": payload,
-            "signature": signature,
-            "kwargs": kwargs,
-        })
+        self.calls.append(
+            {
+                "method": "handle_webhook",
+                "payload": payload,
+                "signature": signature,
+                "kwargs": kwargs,
+            }
+        )
 
         if self._should_fail:
             return WebhookResult(
@@ -204,10 +214,12 @@ class MockPaymentProvider(PaymentProvider):
 
     def get_payment_status(self, provider_payment_id: str) -> str:
         """Get mock payment status."""
-        self.calls.append({
-            "method": "get_payment_status",
-            "provider_payment_id": provider_payment_id,
-        })
+        self.calls.append(
+            {
+                "method": "get_payment_status",
+                "provider_payment_id": provider_payment_id,
+            }
+        )
 
         if self._should_fail:
             return "failed"

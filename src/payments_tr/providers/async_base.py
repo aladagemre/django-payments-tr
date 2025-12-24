@@ -237,9 +237,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: self.sync_provider.handle_webhook(
-                payload, signature=signature, **kwargs
-            ),
+            lambda: self.sync_provider.handle_webhook(payload, signature=signature, **kwargs),
         )
 
     async def get_payment_status_async(self, provider_payment_id: str) -> str:
