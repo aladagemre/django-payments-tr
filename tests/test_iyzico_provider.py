@@ -293,3 +293,111 @@ class TestIyzicoAdapter:
 
         buyer_info = iyzico_adapter._extract_buyer_info(mock_payment)
         assert buyer_info.email == "client@example.com"
+
+
+class TestIyzicoEdgeCases:
+    """Tests for iyzico edge cases and error handling."""
+
+    def test_confirm_payment_exception_with_error_code(self, iyzico_adapter, mock_iyzico_client):
+        """Test confirm_payment extracts error_code from exception."""
+        # Create exception with error_code attribute
+        error = Exception("Custom error")
+        error.error_code = "CUSTOM_ERROR_CODE"
+        mock_iyzico_client.retrieve_checkout_form = MagicMock(side_effect=error)
+
+        result = iyzico_adapter.confirm_payment("token_123")
+
+        assert result.success is False
+        assert result.error_code == "CUSTOM_ERROR_CODE"
+
+    def test_confirm_payment_exception_without_error_code(
+        self, iyzico_adapter, mock_iyzico_client
+    ):
+        """Test confirm_payment uses default error_code when not provided."""
+        mock_iyzico_client.retrieve_checkout_form = MagicMock(
+            side_effect=Exception("Generic error")
+        )
+
+        result = iyzico_adapter.confirm_payment("token_123")
+
+        assert result.success is False
+        assert result.error_code == "IYZICO_ERROR"
+
+    def test_get_payment_status_unknown(self, iyzico_adapter):
+        """Test get_payment_status returns unknown when status is None."""
+        # Mock confirm_payment to return a failed result with None status
+        with patch.object(iyzico_adapter, "confirm_payment") as mock_confirm:
+            from payments_tr.providers import PaymentResult
+
+            mock_confirm.return_value = PaymentResult(
+                success=False,
+                error_message="Payment failed",
+                status=None,  # This should make get_payment_status return "unknown"
+            )
+
+            status = iyzico_adapter.get_payment_status("token_123")
+
+            assert status == "unknown"
+
+    def test_build_checkout_request_without_basket_items(self, iyzico_adapter, mock_payment):
+        """Test _build_checkout_request uses default basket when not provided."""
+        buyer_info = BuyerInfo(
+            email="test@example.com",
+            name="Test",
+            surname="User",
+            phone="+905551234567",
+        )
+
+        # Call without basket_items - should build default basket
+        # Method returns tuple: (order_data, buyer_dict, address_dict, basket_items)
+        _, _, _, basket_items = iyzico_adapter._build_checkout_request(
+            mock_payment, "TRY", buyer_info
+        )
+
+        # Default basket should have at least one item
+        assert len(basket_items) > 0
+        # First item should have payment amount
+        assert basket_items[0]["price"] == str(mock_payment.amount / 100)
+
+    def test_build_checkout_request_with_custom_basket_items(
+        self, iyzico_adapter, mock_payment
+    ):
+        """Test _build_checkout_request uses provided basket_items."""
+        buyer_info = BuyerInfo(
+            email="test@example.com",
+            name="Test",
+            surname="User",
+            phone="+905551234567",
+        )
+
+        custom_basket = [
+            {
+                "id": "item1",
+                "name": "Custom Item",
+                "category1": "Electronics",
+                "itemType": "PHYSICAL",
+                "price": "100.00",
+            }
+        ]
+
+        # Method returns tuple: (order_data, buyer_dict, address_dict, basket_items)
+        _, _, _, basket_items = iyzico_adapter._build_checkout_request(
+            mock_payment, "TRY", buyer_info, basket_items=custom_basket
+        )
+
+        # Should use the custom basket items
+        assert basket_items == custom_basket
+
+    def test_handle_webhook_exception_handling(self, iyzico_adapter):
+        """Test handle_webhook exception path with error_code extraction."""
+        # Patch confirm_payment to raise an exception
+        with patch.object(iyzico_adapter, "confirm_payment") as mock_confirm:
+            error = Exception("Connection timeout")
+            error.error_code = "TIMEOUT_ERROR"
+            mock_confirm.side_effect = error
+
+            result = iyzico_adapter.handle_webhook({"token": "test_token"})
+
+            assert result.success is False
+            assert "Connection timeout" in result.error_message
+            assert result.error_code == "TIMEOUT_ERROR"
