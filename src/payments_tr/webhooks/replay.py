@@ -11,6 +11,7 @@ import logging
 from datetime import timedelta
 from typing import Any, Callable
 
+from django.db import models
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -259,10 +260,3 @@ class WebhookReplayer:
             f"Scheduled retry #{event.retry_count} for webhook: {event.event_id} "
             f"in {delay} seconds"
         )
-
-
-# Import models for type checking
-try:
-    from django.db import models
-except ImportError:
-    pass

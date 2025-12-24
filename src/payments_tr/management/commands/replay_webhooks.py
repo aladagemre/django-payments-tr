@@ -53,11 +53,12 @@ class Command(BaseCommand):
             # Try to import from Django settings
             from django.conf import settings
 
-            webhook_model_path = getattr(settings, "PAYMENTS_TR_WEBHOOK_MODEL", None)
+            payments_settings = getattr(settings, "PAYMENTS_TR", {})
+            webhook_model_path = payments_settings.get("WEBHOOK_MODEL")
 
             if not webhook_model_path:
                 raise CommandError(
-                    "PAYMENTS_TR_WEBHOOK_MODEL not configured in settings. "
+                    "PAYMENTS_TR['WEBHOOK_MODEL'] not configured in settings. "
                     "Set it to your webhook model path, e.g., 'myapp.models.WebhookEvent'"
                 )
 
