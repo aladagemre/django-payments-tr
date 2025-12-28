@@ -1,7 +1,7 @@
 """
-iyzico payment provider adapter.
+iyzico payment provider.
 
-This adapter wraps django-iyzico to provide a consistent interface
+This provider wraps django-iyzico to provide a consistent interface
 compatible with the payments-tr provider abstraction.
 
 Requires: pip install django-payments-tr[iyzico]
@@ -24,11 +24,11 @@ from payments_tr.providers.base import (
 logger = logging.getLogger(__name__)
 
 
-class IyzicoAdapter(PaymentProvider):
+class IyzicoProvider(PaymentProvider):
     """
-    iyzico payment provider adapter.
+    iyzico payment provider.
 
-    This adapter uses django-iyzico for the underlying implementation,
+    This provider uses django-iyzico for the underlying implementation,
     providing a consistent interface for the payments-tr abstraction layer.
 
     Features:
@@ -53,7 +53,7 @@ class IyzicoAdapter(PaymentProvider):
     provider_name = "iyzico"
 
     def __init__(self) -> None:
-        """Initialize the iyzico adapter."""
+        """Initialize the iyzico provider."""
         try:
             from django_iyzico import IyzicoClient  # type: ignore[attr-defined]
 

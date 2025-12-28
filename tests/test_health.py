@@ -135,10 +135,10 @@ class TestProviderHealthChecker:
 
     def test_check_provider_stripe(self):
         """Test checking Stripe provider."""
-        from payments_tr.providers.stripe import StripeAdapter
+        from payments_tr.providers.stripe import StripeProvider
 
         checker = ProviderHealthChecker()
-        provider = Mock(spec=StripeAdapter)
+        provider = Mock(spec=StripeProvider)
         provider.provider_name = "stripe"
 
         with patch.object(checker, "_check_stripe") as mock_check_stripe:
@@ -159,10 +159,10 @@ class TestProviderHealthChecker:
 
     def test_check_provider_iyzico(self):
         """Test checking iyzico provider."""
-        from payments_tr.providers.iyzico import IyzicoAdapter
+        from payments_tr.providers.iyzico import IyzicoProvider
 
         checker = ProviderHealthChecker()
-        provider = Mock(spec=IyzicoAdapter)
+        provider = Mock(spec=IyzicoProvider)
         provider.provider_name = "iyzico"
 
         with patch.object(checker, "_check_iyzico") as mock_check_iyzico:
@@ -227,7 +227,7 @@ class TestCheckStripe:
     def test_check_stripe_invalid_provider_type(self):
         """Test Stripe check with wrong provider type."""
         checker = ProviderHealthChecker()
-        provider = Mock()  # Not a StripeAdapter
+        provider = Mock()  # Not a StripeProvider
 
         result = checker._check_stripe(provider, test_mode=True)
 
@@ -242,7 +242,7 @@ class TestCheckIyzico:
     def test_check_iyzico_invalid_provider_type(self):
         """Test iyzico check with wrong provider type."""
         checker = ProviderHealthChecker()
-        provider = Mock()  # Not an IyzicoAdapter
+        provider = Mock()  # Not an IyzicoProvider
 
         result = checker._check_iyzico(provider, test_mode=True)
 

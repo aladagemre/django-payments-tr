@@ -1,7 +1,7 @@
 """
-Stripe payment provider adapter.
+Stripe payment provider.
 
-This adapter wraps the Stripe SDK to provide a consistent interface
+This provider wraps the Stripe SDK to provide a consistent interface
 compatible with the payments-tr provider abstraction.
 
 Requires: pip install django-payments-tr[stripe]
@@ -29,11 +29,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class StripeAdapter(PaymentProvider):
+class StripeProvider(PaymentProvider):
     """
-    Stripe payment provider adapter.
+    Stripe payment provider.
 
-    This adapter uses the Stripe SDK directly, providing a consistent
+    This provider uses the Stripe SDK directly, providing a consistent
     interface for the payments-tr abstraction layer.
 
     Features:
@@ -59,7 +59,7 @@ class StripeAdapter(PaymentProvider):
     provider_name = "stripe"
 
     def __init__(self) -> None:
-        """Initialize the Stripe adapter."""
+        """Initialize the Stripe provider."""
         try:
             import stripe
 

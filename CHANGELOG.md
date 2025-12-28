@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-28
+
+### Changed
+
+- **BREAKING**: Renamed `IyzicoAdapter` to `IyzicoProvider` for consistency
+- **BREAKING**: Renamed `StripeAdapter` to `StripeProvider` for consistency
+- Consistent `*Provider` naming convention throughout the codebase
+- Updated all documentation and docstrings to reflect new naming
+
 ## [0.1.0] - 2025-12-23
 
 ### Added
@@ -58,4 +67,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional: django-iyzico for iyzico integration
 - Optional: stripe for Stripe integration
 
+[0.2.0]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.1.0

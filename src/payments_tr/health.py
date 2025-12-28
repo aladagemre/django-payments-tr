@@ -110,9 +110,9 @@ class ProviderHealthChecker:
 
     def _check_stripe(self, provider: Any, test_mode: bool) -> HealthCheckResult:
         """Check Stripe provider health."""
-        from payments_tr.providers.stripe import StripeAdapter
+        from payments_tr.providers.stripe import StripeProvider
 
-        if not isinstance(provider, StripeAdapter):
+        if not isinstance(provider, StripeProvider):
             return HealthCheckResult(
                 provider="stripe",
                 healthy=False,
@@ -185,9 +185,9 @@ class ProviderHealthChecker:
 
     def _check_iyzico(self, provider: Any, test_mode: bool) -> HealthCheckResult:
         """Check iyzico provider health."""
-        from payments_tr.providers.iyzico import IyzicoAdapter
+        from payments_tr.providers.iyzico import IyzicoProvider
 
-        if not isinstance(provider, IyzicoAdapter):
+        if not isinstance(provider, IyzicoProvider):
             return HealthCheckResult(
                 provider="iyzico",
                 healthy=False,

@@ -88,18 +88,18 @@ def iyzico_adapter(mock_iyzico_client):
     """Create iyzico adapter with mocked client."""
     with patch.dict("sys.modules", {"django_iyzico": MagicMock()}):
         with patch(
-            "payments_tr.providers.iyzico.IyzicoAdapter.__init__",
+            "payments_tr.providers.iyzico.IyzicoProvider.__init__",
             lambda self: None,
         ):
-            from payments_tr.providers.iyzico import IyzicoAdapter
+            from payments_tr.providers.iyzico import IyzicoProvider
 
-            adapter = IyzicoAdapter()
+            adapter = IyzicoProvider()
             adapter._client = mock_iyzico_client
             return adapter
 
 
-class TestIyzicoAdapter:
-    """Tests for IyzicoAdapter."""
+class TestIyzicoProvider:
+    """Tests for IyzicoProvider."""
 
     def test_provider_name(self, iyzico_adapter):
         """Test provider name."""

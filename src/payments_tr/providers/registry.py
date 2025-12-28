@@ -23,12 +23,12 @@ class ProviderRegistry:
     """
     Registry for payment provider classes.
 
-    This allows dynamic registration of provider adapters and
+    This allows dynamic registration of providers and
     retrieval based on configuration.
 
     Example:
         >>> from payments_tr.providers import registry
-        >>> registry.register("custom", CustomProviderAdapter)
+        >>> registry.register("custom", CustomProvider)
         >>> provider = registry.get("custom")
     """
 
@@ -210,7 +210,7 @@ def register_provider(name: str, provider_class: type[PaymentProvider]) -> None:
 
     Example:
         >>> from payments_tr import register_provider
-        >>> register_provider("paytr", PayTRAdapter)
+        >>> register_provider("paytr", PayTRProvider)
     """
     registry.register(name, provider_class)
 

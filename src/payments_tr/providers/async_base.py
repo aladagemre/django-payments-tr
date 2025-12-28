@@ -43,7 +43,7 @@ class AsyncPaymentProvider(ABC):
     or use AsyncProviderAdapter to wrap a sync provider.
 
     Example:
-        >>> provider = AsyncStripeAdapter()
+        >>> provider = AsyncStripeProvider()
         >>> result = await provider.create_payment_async(payment, callback_url="...")
     """
 
@@ -167,7 +167,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
     in a thread pool to avoid blocking the event loop.
 
     Example:
-        >>> sync_provider = IyzicoAdapter()
+        >>> sync_provider = IyzicoProvider()
         >>> async_provider = AsyncProviderAdapter(sync_provider)
         >>> result = await async_provider.create_payment_async(payment)
     """

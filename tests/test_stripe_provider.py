@@ -70,22 +70,22 @@ def mock_stripe():
 
 @pytest.fixture
 def stripe_adapter(mock_stripe):
-    """Create Stripe adapter with mocked module."""
+    """Create Stripe provider with mocked module."""
     with patch.dict("sys.modules", {"stripe": mock_stripe}):
         with patch(
-            "payments_tr.providers.stripe.StripeAdapter.__init__",
+            "payments_tr.providers.stripe.StripeProvider.__init__",
             lambda self: None,
         ):
-            from payments_tr.providers.stripe import StripeAdapter
+            from payments_tr.providers.stripe import StripeProvider
 
-            adapter = StripeAdapter()
+            adapter = StripeProvider()
             adapter._stripe = mock_stripe
             adapter._webhook_secret = "whsec_test"
             return adapter
 
 
-class TestStripeAdapter:
-    """Tests for StripeAdapter."""
+class TestStripeProvider:
+    """Tests for StripeProvider."""
 
     def test_provider_name(self, stripe_adapter):
         """Test provider name."""
@@ -327,8 +327,8 @@ class TestStripeAdapter:
         assert stripe_adapter.supports_subscriptions() is True
 
 
-class TestStripeAdapterInit:
-    """Tests for StripeAdapter initialization."""
+class TestStripeProviderInit:
+    """Tests for StripeProvider initialization."""
 
     def test_init_missing_api_key(self, caplog, mock_stripe):
         """Test warning when Stripe API key not configured."""
@@ -341,9 +341,9 @@ class TestStripeAdapterInit:
                 mock_settings.STRIPE_SECRET_KEY = ""  # Empty API key
                 mock_settings.STRIPE_WEBHOOK_SECRET = ""
 
-                from payments_tr.providers.stripe import StripeAdapter
+                from payments_tr.providers.stripe import StripeProvider
 
-                adapter = StripeAdapter()
+                adapter = StripeProvider()
 
                 # Check warning was logged
                 assert "STRIPE_SECRET_KEY not configured" in caplog.text
@@ -356,9 +356,9 @@ class TestStripeAdapterInit:
                 mock_settings.STRIPE_SECRET_KEY = "sk_test_123"
                 mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_123"
 
-                from payments_tr.providers.stripe import StripeAdapter
+                from payments_tr.providers.stripe import StripeProvider
 
-                adapter = StripeAdapter()
+                adapter = StripeProvider()
 
                 assert adapter._stripe.api_key == "sk_test_123"
                 assert adapter._webhook_secret == "whsec_123"

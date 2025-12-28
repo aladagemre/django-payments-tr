@@ -15,18 +15,18 @@ class PaymentsTrConfig(AppConfig):
         # Auto-register available providers
         from payments_tr.providers import registry
 
-        # Try to register iyzico adapter if django-iyzico is installed
+        # Try to register iyzico provider if django-iyzico is installed
         try:
-            from payments_tr.providers.iyzico import IyzicoAdapter
+            from payments_tr.providers.iyzico import IyzicoProvider
 
-            registry.register("iyzico", IyzicoAdapter)
+            registry.register("iyzico", IyzicoProvider)
         except ImportError:
             pass
 
-        # Try to register stripe adapter if stripe is installed
+        # Try to register stripe provider if stripe is installed
         try:
-            from payments_tr.providers.stripe import StripeAdapter
+            from payments_tr.providers.stripe import StripeProvider
 
-            registry.register("stripe", StripeAdapter)
+            registry.register("stripe", StripeProvider)
         except ImportError:
             pass
