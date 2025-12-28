@@ -87,15 +87,15 @@ class EFTPaymentAdminMixin:
         """Display EFT status with color coding."""
         if hasattr(obj, "is_eft_approved") and obj.is_eft_approved:
             return mark_safe(
-                '<span style="color: #28a745; font-weight: bold;">' "&#x2713; Approved</span>"
+                '<span style="color: #28a745; font-weight: bold;">&#x2713; Approved</span>'
             )
         elif hasattr(obj, "is_eft_rejected") and obj.is_eft_rejected:
             return mark_safe(
-                '<span style="color: #dc3545; font-weight: bold;">' "&#x2717; Rejected</span>"
+                '<span style="color: #dc3545; font-weight: bold;">&#x2717; Rejected</span>'
             )
         elif hasattr(obj, "eft_reference_number") and obj.eft_reference_number:
             return mark_safe(
-                '<span style="color: #ffc107; font-weight: bold;">' "&#x23F3; Pending</span>"
+                '<span style="color: #ffc107; font-weight: bold;">&#x23F3; Pending</span>'
             )
         return mark_safe('<span style="color: #6c757d;">N/A</span>')
 

@@ -1,9 +1,7 @@
 """Tests for provider health check functionality."""
 
-from datetime import datetime
 from unittest.mock import Mock, patch
 
-import pytest
 from django.utils import timezone as django_timezone
 
 from payments_tr.health import HealthCheckResult, ProviderHealthChecker
@@ -348,7 +346,6 @@ class TestCheckAllProviders:
 
     def test_check_all_providers_with_exception(self):
         """Test check_all_providers handles provider loading exceptions."""
-        from payments_tr.health import HealthCheckResult
 
         checker = ProviderHealthChecker()
 

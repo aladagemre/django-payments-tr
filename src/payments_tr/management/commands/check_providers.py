@@ -60,7 +60,7 @@ class Command(BaseCommand):
 
             results = checker.check_all_providers(test_mode)
 
-            for name, result in results.items():
+            for _name, result in results.items():
                 self._display_result(result, verbose)
                 self.stdout.write("")
 

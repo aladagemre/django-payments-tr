@@ -3,8 +3,7 @@
 import hashlib
 import hmac
 import time
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache
@@ -184,7 +183,7 @@ class TestRateLimiter:
         limiter = RateLimiter(max_requests=5, window=60)
 
         # First 5 requests should be allowed
-        for i in range(5):
+        for _i in range(5):
             assert limiter.allow("test-id") is True
 
     def test_rate_limiter_block_over_limit(self, caplog):
@@ -192,7 +191,7 @@ class TestRateLimiter:
         limiter = RateLimiter(max_requests=3, window=60)
 
         # First 3 requests allowed
-        for i in range(3):
+        for _i in range(3):
             assert limiter.allow("test-id") is True
 
         # 4th request should be blocked

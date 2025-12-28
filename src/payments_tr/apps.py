@@ -15,7 +15,7 @@ class PaymentsTrConfig(AppConfig):
         # Auto-register available providers
         from payments_tr.providers import registry
 
-        # Try to register iyzico provider if django-iyzico is installed
+        # Try to register iyzico provider if iyzipay is installed
         try:
             from payments_tr.providers.iyzico import IyzicoProvider
 

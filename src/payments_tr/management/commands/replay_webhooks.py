@@ -69,7 +69,7 @@ class Command(BaseCommand):
             WebhookEvent = apps.get_model(app_label, model_name)
 
         except Exception as e:
-            raise CommandError(f"Failed to load webhook model: {e}")
+            raise CommandError(f"Failed to load webhook model: {e}") from e
 
         # Import replayer
         from payments_tr.webhooks.replay import WebhookReplayer
@@ -143,4 +143,4 @@ class Command(BaseCommand):
                 )
 
         except Exception as e:
-            raise CommandError(f"Webhook replay failed: {e}")
+            raise CommandError(f"Webhook replay failed: {e}") from e

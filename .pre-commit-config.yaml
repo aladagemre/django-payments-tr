@@ -1,0 +1,63 @@
+# Pre-commit configuration matching GitHub CI workflow
+# Install: uv add pre-commit --dev && uv run pre-commit install
+# Run manually: uv run pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Ruff - fast linter and formatter (replaces flake8, isort, black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Type checking with mypy
+  # Note: mypy with django-stubs plugin requires Django settings which aren't
+  # available in pre-commit's isolated environment. Run mypy via CI instead:
+  # uv run mypy src/
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.13.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies:
+  #         - django>=4.2
+  #         - django-stubs>=4.2
+  #       args: [--ignore-missing-imports]
+
+  # Security linting with bandit
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        # Skip B101 (assert), B308/B703 (mark_safe - common in Django admin)
+        # B324 (MD5) - used for cache key generation with usedforsecurity=False
+        args:
+          - -ll
+          - --skip
+          - B101,B308,B703,B324
+        exclude: tests/
+
+  # Build validation - check pyproject.toml is valid
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+
+# CI-only checks (not suitable for pre-commit):
+# - pytest (tests should run separately, not on every commit)
+# - pip-audit (requires full environment, better in CI)
+# - safety (requires API key for full functionality)
+# - twine check (requires built package)
+# - coverage thresholds (requires full test run)

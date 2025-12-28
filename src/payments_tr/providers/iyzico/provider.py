@@ -1,7 +1,7 @@
 """
 iyzico payment provider.
 
-This provider wraps django-iyzico to provide a consistent interface
+This provider wraps the iyzico client to provide a consistent interface
 compatible with the payments-tr provider abstraction.
 
 Requires: pip install django-payments-tr[iyzico]
@@ -28,7 +28,7 @@ class IyzicoProvider(PaymentProvider):
     """
     iyzico payment provider.
 
-    This provider uses django-iyzico for the underlying implementation,
+    This provider uses the iyzico client for the underlying implementation,
     providing a consistent interface for the payments-tr abstraction layer.
 
     Features:
@@ -55,12 +55,12 @@ class IyzicoProvider(PaymentProvider):
     def __init__(self) -> None:
         """Initialize the iyzico provider."""
         try:
-            from django_iyzico import IyzicoClient  # type: ignore[attr-defined]
+            from payments_tr.providers.iyzico.client import IyzicoClient
 
             self._client = IyzicoClient()
         except ImportError as e:
             raise ImportError(
-                "django-iyzico is required for the iyzico provider. "
+                "iyzico provider requires 'iyzipay' package. "
                 "Install it with: pip install django-payments-tr[iyzico]"
             ) from e
 
@@ -107,7 +107,7 @@ class IyzicoProvider(PaymentProvider):
             buyer_info = self._extract_buyer_info(payment)
 
         try:
-            # Build request data for django-iyzico
+            # Build request data
             order_data, buyer_dict, billing_address, basket_items = self._build_checkout_request(
                 payment=payment,
                 currency=currency,
@@ -117,8 +117,7 @@ class IyzicoProvider(PaymentProvider):
 
             installments = kwargs.get("installments", [1, 2, 3, 6, 9, 12])
 
-            # Create checkout form via django-iyzico
-            # Note: django-iyzico raises PaymentError on failure
+            # Create checkout form via iyzico client
             response = self._client.create_checkout_form(
                 order_data=order_data,
                 buyer=buyer_dict,
@@ -142,7 +141,6 @@ class IyzicoProvider(PaymentProvider):
             )
 
         except Exception as e:
-            # django-iyzico raises PaymentError on failure
             # Extract error details if available
             error_code = getattr(e, "error_code", None) or "IYZICO_ERROR"
             error_message = str(e)
@@ -232,13 +230,12 @@ class IyzicoProvider(PaymentProvider):
         # Get IP address for refund (required by iyzico)
         ip_address = kwargs.get("ip_address", "127.0.0.1")
 
-        # Convert amount to Decimal for django-iyzico
+        # Convert amount to Decimal for iyzico
         refund_amount = None
         if amount is not None:
             refund_amount = Decimal(str(amount)) / 100  # Convert kuruş to TRY
 
         try:
-            # Note: django-iyzico raises PaymentError on failure
             response = self._client.refund_payment(
                 payment_id=provider_payment_id,
                 ip_address=ip_address,
@@ -256,7 +253,6 @@ class IyzicoProvider(PaymentProvider):
             )
 
         except Exception as e:
-            # django-iyzico raises PaymentError on failure
             # Extract error details if available
             error_code = getattr(e, "error_code", None) or "IYZICO_ERROR"
             error_message = str(e)
@@ -405,23 +401,26 @@ class IyzicoProvider(PaymentProvider):
         if hasattr(payment, "client"):
             client = payment.client
             user = getattr(client, "user", client)
-
-            # Parse name safely
-            full_name = getattr(user, "name", "").strip()
-            name_parts = full_name.split() if full_name else []
-
             return BuyerInfo(
                 id=str(getattr(client, "id", "")),
                 email=getattr(user, "email", ""),
                 name=getattr(
                     user,
                     "first_name",
-                    name_parts[0] if name_parts else "Customer",
+                    (
+                        getattr(user, "name", "").split()[0]
+                        if getattr(user, "name", "")
+                        else "Customer"
+                    ),
                 ),
                 surname=getattr(
                     user,
                     "last_name",
-                    name_parts[-1] if len(name_parts) > 1 else "Customer",
+                    (
+                        getattr(user, "name", "").split()[-1]
+                        if len(getattr(user, "name", "").split()) > 1
+                        else "Customer"
+                    ),
                 ),
                 phone=getattr(client, "phone", ""),
             )

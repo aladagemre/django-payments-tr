@@ -8,8 +8,9 @@ or are pending retry.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Callable
+from typing import Any
 
 from django.db import models
 from django.utils import timezone
@@ -256,6 +257,5 @@ class WebhookReplayer:
 
         event.schedule_retry(delay)
         logger.info(
-            f"Scheduled retry #{event.retry_count} for webhook: {event.event_id} "
-            f"in {delay} seconds"
+            f"Scheduled retry #{event.retry_count} for webhook: {event.event_id} in {delay} seconds"
         )

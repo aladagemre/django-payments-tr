@@ -182,9 +182,68 @@ from payments_tr import get_payment_provider
 # Get default (from settings)
 provider = get_payment_provider()
 
-# Get specific provider
+# Get specific provider by name
 iyzico = get_payment_provider("iyzico")
 stripe = get_payment_provider("stripe")
+```
+
+### Per-Country Provider Selection
+
+For multi-country deployments, configure different providers per country:
+
+```python
+# settings.py
+PAYMENT_PROVIDERS_BY_COUNTRY = {
+    "TR": "iyzico",   # Turkey uses iyzico
+    "US": "stripe",   # USA uses Stripe
+    "GB": "stripe",   # UK uses Stripe
+    "BR": "pagarme",  # Brazil uses local provider (when implemented)
+}
+PAYMENT_PROVIDER = "stripe"  # Default fallback for unconfigured countries
+```
+
+```python
+from payments_tr import get_payment_provider
+
+# Get provider based on user's country
+provider = get_payment_provider(country_code="TR")  # Returns iyzico
+provider = get_payment_provider(country_code="US")  # Returns Stripe
+provider = get_payment_provider(country_code="XX")  # Falls back to default (Stripe)
+
+# Explicit provider name overrides country
+provider = get_payment_provider(name="stripe", country_code="TR")  # Returns Stripe
+```
+
+### Helper Functions
+
+```python
+from payments_tr import (
+    get_provider_for_country,
+    get_provider_name,
+    get_supported_countries,
+    get_available_providers,
+    is_iyzico_enabled,
+    is_stripe_enabled,
+)
+
+# Get provider name for a country
+get_provider_for_country("TR")  # "iyzico"
+get_provider_for_country("XX")  # "stripe" (default)
+
+# Get provider name (with optional country)
+get_provider_name()             # "stripe" (default)
+get_provider_name("TR")         # "iyzico"
+
+# Get all configured country mappings
+get_supported_countries()       # {"TR": "iyzico", "US": "stripe", ...}
+
+# Get all registered providers
+get_available_providers()       # ["stripe", "iyzico"]
+
+# Check which provider is active
+is_iyzico_enabled()             # False (checking default)
+is_iyzico_enabled("TR")         # True
+is_stripe_enabled("US")         # True
 ```
 
 ### Creating Custom Providers
@@ -192,7 +251,7 @@ stripe = get_payment_provider("stripe")
 ```python
 from payments_tr import PaymentProvider, PaymentResult, register_provider
 
-class PayTRAdapter(PaymentProvider):
+class PayTRProvider(PaymentProvider):
     provider_name = "paytr"
 
     def create_payment(self, payment, **kwargs):
@@ -212,7 +271,7 @@ class PayTRAdapter(PaymentProvider):
         return "succeeded"
 
 # Register your provider
-register_provider("paytr", PayTRAdapter)
+register_provider("paytr", PayTRProvider)
 ```
 
 ## DRF Serializers
@@ -239,29 +298,147 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response(PaymentResultSerializer(result.to_dict()).data)
 ```
 
-## Package Ecosystem
+## Architecture
 
-This package is designed to work with:
-
-- **[django-iyzico](https://github.com/aladagemre/django-iyzico)**: Pure iyzico SDK wrapper
-- **django-stripe** (planned): Pure Stripe SDK wrapper
+This package provides a complete payment solution with embedded provider clients:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   django-payments-tr                     │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │  Provider Abstraction Layer                      │    │
-│  │  Turkey-Specific Features (KDV, TCKN, EFT)      │    │
-│  └─────────────────────────────────────────────────┘    │
-│  ┌──────────────────┐    ┌──────────────────┐          │
-│  │  IyzicoAdapter   │    │  StripeAdapter   │          │
-│  └────────┬─────────┘    └────────┬─────────┘          │
-└───────────┼───────────────────────┼─────────────────────┘
-            │                       │
-            ▼                       ▼
-   ┌─────────────────┐    ┌─────────────────┐
-   │  django-iyzico  │    │     stripe      │
-   └─────────────────┘    └─────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                      django-payments-tr                           │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  Provider Abstraction Layer                                  │  │
+│  │  - PaymentProvider abstract base class                       │  │
+│  │  - PaymentResult, RefundResult, WebhookResult               │  │
+│  │  - Per-country provider selection                            │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  Turkey-Specific Features                                    │  │
+│  │  - KDV (VAT) calculation                                     │  │
+│  │  - TCKN, IBAN, VKN validation                               │  │
+│  │  - EFT payment workflow                                      │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────┐    ┌────────────────────────┐        │
+│  │  IyzicoClient          │    │  StripeProvider        │        │
+│  │  (embedded)            │    │                        │        │
+│  │  - Checkout forms      │    │  - PaymentIntent       │        │
+│  │  - 3D Secure           │    │  - Webhooks            │        │
+│  │  - Installments        │    │  - Refunds             │        │
+│  │  - Subscriptions       │    │  - Subscriptions       │        │
+│  │  - Card storage        │    │                        │        │
+│  └───────────┬────────────┘    └───────────┬────────────┘        │
+└──────────────┼─────────────────────────────┼─────────────────────┘
+               ▼                             ▼
+      ┌─────────────────┐           ┌─────────────────┐
+      │    iyzipay      │           │     stripe      │
+      │  (Python SDK)   │           │  (Python SDK)   │
+      └─────────────────┘           └─────────────────┘
+```
+
+**Note**: The iyzico client is fully embedded in this package. You don't need a separate django-iyzico installation.
+
+## Low-Level iyzico Client
+
+For advanced use cases, you can access the embedded `IyzicoClient` directly:
+
+```python
+from payments_tr.providers.iyzico import get_client, IyzicoClient
+
+# Get a configured client (uses Django settings)
+client = get_client()
+
+# Or create with explicit settings
+client = IyzicoClient(
+    api_key="your-api-key",
+    secret_key="your-secret-key",
+    base_url="https://sandbox-api.iyzipay.com"
+)
+
+# Create checkout form
+response = client.create_checkout_form(
+    order_data={
+        "locale": "tr",
+        "conversationId": "123456",
+        "price": "100.00",
+        "paidPrice": "100.00",
+        "currency": "TRY",
+        "basketId": "B123",
+        "paymentGroup": "PRODUCT",
+    },
+    buyer={
+        "id": "BY789",
+        "name": "John",
+        "surname": "Doe",
+        "email": "john@example.com",
+        "gsmNumber": "+905551234567",
+        "identityNumber": "11111111111",
+        "registrationAddress": "Istanbul, Turkey",
+        "city": "Istanbul",
+        "country": "Turkey",
+        "ip": "85.34.78.112",
+    },
+    billing_address={
+        "contactName": "John Doe",
+        "city": "Istanbul",
+        "country": "Turkey",
+        "address": "Istanbul, Turkey",
+    },
+    basket_items=[
+        {
+            "id": "ITEM1",
+            "name": "Product Name",
+            "category1": "Category",
+            "itemType": "PHYSICAL",
+            "price": "100.00",
+        }
+    ],
+    callback_url="https://example.com/callback",
+)
+
+# Retrieve checkout form result (after callback)
+result = client.retrieve_checkout_form(token)
+
+# Process refund
+refund_response = client.refund_payment(
+    payment_id="12345678",
+    ip_address="85.34.78.112",
+    amount=Decimal("50.00"),  # Partial refund
+    reason="Customer request",
+)
+```
+
+### iyzico Client Features
+
+The embedded client supports:
+
+| Feature | Method |
+|---------|--------|
+| Checkout Form | `create_checkout_form()`, `retrieve_checkout_form()` |
+| 3D Secure | Automatic with checkout forms |
+| Refunds | `refund_payment()` (full and partial) |
+| Installments | `get_installment_info()` |
+| Card Storage | `create_card()`, `delete_card()` |
+| BIN Lookup | `retrieve_bin_number()` |
+| Subscriptions | `payments_tr.providers.iyzico.subscriptions` module |
+
+### iyzico Model Mixin
+
+For Django models with iyzico-specific fields:
+
+```python
+from django.db import models
+from payments_tr.providers.iyzico.models import AbstractIyzicoPayment
+
+class Payment(AbstractIyzicoPayment):
+    """Payment model with iyzico fields pre-configured."""
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE)
+    description = models.TextField(blank=True)
+
+    # AbstractIyzicoPayment provides:
+    # - iyzico_token
+    # - iyzico_conversation_id
+    # - iyzico_payment_id
+    # - status, amount, currency fields
+    # - QuerySet methods for filtering by status
 ```
 
 ## Configuration Reference
@@ -269,8 +446,15 @@ This package is designed to work with:
 ```python
 # settings.py
 
-# Payment provider selection
-PAYMENT_PROVIDER = "iyzico"  # or "stripe"
+# Default payment provider (used when no country match)
+PAYMENT_PROVIDER = "stripe"  # or "iyzico"
+
+# Per-country provider mapping (optional)
+PAYMENT_PROVIDERS_BY_COUNTRY = {
+    "TR": "iyzico",   # Turkey uses iyzico
+    "US": "stripe",   # USA uses Stripe
+    "GB": "stripe",   # UK uses Stripe
+}
 
 # iyzico settings
 IYZICO_API_KEY = "..."
@@ -313,4 +497,4 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 ## Related Projects
 
-- [django-iyzico](https://github.com/aladagemre/django-iyzico) - Django integration for iyzico payment gateway
+- [django-iyzico](https://github.com/aladagemre/django-iyzico) - The iyzico client is now **embedded** in django-payments-tr. The standalone package is deprecated in favor of this unified solution.

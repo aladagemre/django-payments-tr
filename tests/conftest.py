@@ -1,6 +1,17 @@
 """Pytest configuration and fixtures."""
 
+import os
+
+import django
 import pytest
+
+# Configure Django settings before any tests
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.settings")
+
+
+def pytest_configure():
+    """Configure Django before tests run."""
+    django.setup()
 
 
 @pytest.fixture

@@ -78,7 +78,7 @@ def test_payment(args: Any) -> int:
         amount = args.amount or 1000
 
         print(f"Testing payment with provider: {provider_name}")
-        print(f"Amount: {amount/100:.2f} TRY")
+        print(f"Amount: {amount / 100:.2f} TRY")
         print("-" * 50)
 
         # Create test payment

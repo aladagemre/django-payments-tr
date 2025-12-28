@@ -11,7 +11,8 @@ import functools
 import hashlib
 import json
 import logging
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from django.db import transaction
 
@@ -121,7 +122,7 @@ def with_audit_log(operation: str):
 
                 return result
 
-            except Exception as e:
+            except Exception:
                 # Log failure
                 user = kwargs.get("user", "system")
                 payment = args[0] if args else None
@@ -142,7 +143,7 @@ def with_audit_log(operation: str):
     return decorator
 
 
-def atomic_payment_operation(func: Callable[..., T]) -> Callable[..., T]:
+def atomic_payment_operation[T](func: Callable[..., T]) -> Callable[..., T]:
     """
     Decorator to wrap payment operations in database transaction.
 
@@ -252,7 +253,7 @@ def cache_provider_result(ttl: int = 300):
                     "kwargs": {k: str(v) for k, v in sorted(kwargs.items())},
                 }
                 cache_json = json.dumps(cache_data, sort_keys=True)
-                cache_hash = hashlib.md5(cache_json.encode()).hexdigest()
+                cache_hash = hashlib.md5(cache_json.encode(), usedforsecurity=False).hexdigest()
                 cache_key = f"payments_tr:{func.__name__}:{cache_hash}"
             except (TypeError, ValueError) as e:
                 logger.warning(f"Failed to generate cache key for {func.__name__}: {e}")
@@ -312,7 +313,7 @@ def require_payment_provider(provider_name: str | None = None):
     return decorator
 
 
-def measure_payment_time(func: Callable[..., T]) -> Callable[..., T]:
+def measure_payment_time[T](func: Callable[..., T]) -> Callable[..., T]:
     """
     Decorator to measure and log payment operation time.
 

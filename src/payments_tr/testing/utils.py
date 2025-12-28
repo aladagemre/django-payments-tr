@@ -106,9 +106,9 @@ def assert_payment_success(
     """
     assert result.success, f"Payment failed: {result.error_message}"
     if expected_status:
-        assert (
-            result.status == expected_status
-        ), f"Expected status '{expected_status}', got '{result.status}'"
+        assert result.status == expected_status, (
+            f"Expected status '{expected_status}', got '{result.status}'"
+        )
     assert result.provider_payment_id is not None, "Missing provider payment ID"
 
 
@@ -133,9 +133,9 @@ def assert_payment_failed(
     assert not result.success, "Payment succeeded when failure was expected"
     assert result.error_message is not None, "Missing error message"
     if expected_error_code:
-        assert (
-            result.error_code == expected_error_code
-        ), f"Expected error code '{expected_error_code}', got '{result.error_code}'"
+        assert result.error_code == expected_error_code, (
+            f"Expected error code '{expected_error_code}', got '{result.error_code}'"
+        )
 
 
 def assert_refund_success(
@@ -159,9 +159,9 @@ def assert_refund_success(
     assert result.success, f"Refund failed: {result.error_message}"
     assert result.provider_refund_id is not None, "Missing provider refund ID"
     if expected_amount is not None:
-        assert (
-            result.amount == expected_amount
-        ), f"Expected amount {expected_amount}, got {result.amount}"
+        assert result.amount == expected_amount, (
+            f"Expected amount {expected_amount}, got {result.amount}"
+        )
 
 
 class PaymentTestCase:

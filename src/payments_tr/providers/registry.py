@@ -3,12 +3,27 @@ Payment provider registry and factory.
 
 This module provides a registry for payment providers and factory functions
 to get the configured provider instance.
+
+Supports per-country provider selection for multi-country deployments:
+
+    # settings.py
+    PAYMENT_PROVIDERS_BY_COUNTRY = {
+        "TR": "iyzico",   # Turkey uses iyzico
+        "US": "stripe",   # USA uses Stripe
+        "BR": "pagarme",  # Brazil uses local provider
+    }
+    PAYMENT_PROVIDER = "stripe"  # Default fallback
+
+    # Usage
+    provider = get_payment_provider(country_code="TR")  # Gets iyzico
+    provider = get_payment_provider(country_code="US")  # Gets Stripe
+    provider = get_payment_provider(country_code="XX")  # Falls back to default
 """
 
 from __future__ import annotations
 
 import logging
-from functools import cache
+from functools import cache, lru_cache
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -23,7 +38,7 @@ class ProviderRegistry:
     """
     Registry for payment provider classes.
 
-    This allows dynamic registration of providers and
+    This allows dynamic registration of payment providers and
     retrieval based on configuration.
 
     Example:
@@ -59,32 +74,77 @@ class ProviderRegistry:
             del self._providers[name]
             logger.debug(f"Unregistered payment provider: {name}")
 
-    def get(self, name: str | None = None) -> PaymentProvider:
+    def get(
+        self,
+        name: str | None = None,
+        country_code: str | None = None,
+    ) -> PaymentProvider:
         """
-        Get a provider instance by name.
+        Get a provider instance.
+
+        Provider selection priority:
+        1. Explicit `name` parameter (highest priority)
+        2. Country-specific provider from PAYMENT_PROVIDERS_BY_COUNTRY
+        3. Default provider from PAYMENT_PROVIDER setting
+        4. "stripe" as ultimate fallback
 
         Args:
-            name: Provider name, or None to use configured default
+            name: Explicit provider name (overrides country selection)
+            country_code: ISO 3166-1 alpha-2 country code (e.g., "TR", "US")
 
         Returns:
             PaymentProvider instance
 
         Raises:
             ValueError: If provider not found
-        """
-        name = (name or self._get_default_name()).lower()
 
-        if name not in self._providers:
+        Examples:
+            >>> registry.get()                      # Default provider
+            >>> registry.get("iyzico")              # Explicit provider
+            >>> registry.get(country_code="TR")     # Country-based selection
+        """
+        # Priority 1: Explicit provider name
+        if name:
+            resolved_name = name.lower()
+        # Priority 2: Country-specific provider
+        elif country_code:
+            resolved_name = self._get_provider_for_country(country_code)
+        # Priority 3: Default provider from settings
+        else:
+            resolved_name = self._get_default_name()
+
+        if resolved_name not in self._providers:
             available = ", ".join(self._providers.keys()) or "none"
             raise ValueError(
-                f"Unknown payment provider: {name}. "
+                f"Unknown payment provider: {resolved_name}. "
                 f"Available providers: {available}. "
                 f"Make sure the provider package is installed "
-                f"(e.g., pip install django-payments-tr[{name}])"
+                f"(e.g., pip install django-payments-tr[{resolved_name}])"
             )
 
-        logger.info(f"Using payment provider: {name}")
-        return self._providers[name]()
+        logger.debug(
+            f"Using payment provider: {resolved_name}"
+            + (f" (country: {country_code})" if country_code else "")
+        )
+        return self._providers[resolved_name]()
+
+    def _get_provider_for_country(self, country_code: str) -> str:
+        """
+        Get the provider name for a specific country.
+
+        Args:
+            country_code: ISO 3166-1 alpha-2 country code
+
+        Returns:
+            Provider name string
+        """
+        providers_by_country = getattr(settings, "PAYMENT_PROVIDERS_BY_COUNTRY", {})
+        country_upper = country_code.upper()
+
+        if country_upper in providers_by_country:
+            return providers_by_country[country_upper].lower()
+
+        return self._get_default_name()
 
     def get_class(self, name: str) -> type[PaymentProvider]:
         """
@@ -128,8 +188,7 @@ class ProviderRegistry:
 
     def _get_default_name(self) -> str:
         """Get the default provider name from settings."""
-        payments_settings = getattr(settings, "PAYMENTS_TR", {})
-        return payments_settings.get("DEFAULT_PROVIDER", "stripe")
+        return getattr(settings, "PAYMENT_PROVIDER", "stripe")
 
     def clear(self) -> None:
         """Clear all registered providers (useful for testing)."""
@@ -140,17 +199,22 @@ class ProviderRegistry:
 registry = ProviderRegistry()
 
 
-def get_payment_provider(name: str | None = None) -> PaymentProvider:
+def get_payment_provider(
+    name: str | None = None,
+    country_code: str | None = None,
+) -> PaymentProvider:
     """
-    Get the configured payment provider instance.
+    Get a payment provider instance.
 
-    The provider is determined by:
-    1. The name parameter if provided
-    2. The PAYMENT_PROVIDER Django setting
-    3. Default to "stripe" if neither is set
+    Provider selection priority:
+    1. Explicit `name` parameter (highest priority)
+    2. Country-specific provider from PAYMENT_PROVIDERS_BY_COUNTRY
+    3. Default provider from PAYMENT_PROVIDER setting
+    4. "stripe" as ultimate fallback
 
     Args:
-        name: Optional provider name to use instead of setting
+        name: Explicit provider name (overrides country selection)
+        country_code: ISO 3166-1 alpha-2 country code (e.g., "TR", "US", "GB")
 
     Returns:
         PaymentProvider instance
@@ -158,14 +222,20 @@ def get_payment_provider(name: str | None = None) -> PaymentProvider:
     Raises:
         ValueError: If the provider name is not recognized
 
-    Example:
+    Examples:
+        >>> # Use default/global provider
         >>> provider = get_payment_provider()
-        >>> result = provider.create_payment(payment, callback_url=url)
 
-        >>> iyzico = get_payment_provider("iyzico")
-        >>> stripe = get_payment_provider("stripe")
+        >>> # Use country-specific provider
+        >>> provider = get_payment_provider(country_code="TR")  # Gets iyzico for Turkey
+
+        >>> # Explicitly specify provider (ignores country)
+        >>> provider = get_payment_provider(name="stripe")
+
+        >>> # Create payment
+        >>> result = provider.create_payment(payment, callback_url=url)
     """
-    return registry.get(name)
+    return registry.get(name, country_code=country_code)
 
 
 @cache
@@ -176,25 +246,104 @@ def get_default_provider() -> PaymentProvider:
     This is useful for views that need a consistent provider instance.
     The result is cached for the lifetime of the process.
 
+    Note: For country-specific providers, use get_payment_provider(country_code=...)
+    instead, as this returns only the global default.
+
     Returns:
         PaymentProvider instance
     """
     return get_payment_provider()
 
 
-def get_provider_name() -> str:
+@lru_cache(maxsize=32)
+def get_provider_for_country_cached(country_code: str) -> PaymentProvider:
     """
-    Get the name of the configured payment provider.
+    Get a country-specific payment provider instance (cached).
+
+    Caches up to 32 country-provider combinations to avoid
+    repeated instantiation of provider objects.
+
+    Args:
+        country_code: ISO 3166-1 alpha-2 country code
+
+    Returns:
+        PaymentProvider instance for the specified country
+    """
+    return get_payment_provider(country_code=country_code)
+
+
+def get_provider_name(country_code: str | None = None) -> str:
+    """
+    Get the name of the payment provider that would be used.
+
+    Args:
+        country_code: Optional country code to check country-specific provider
 
     Returns:
         Provider name string (e.g., "stripe" or "iyzico")
+
+    Examples:
+        >>> get_provider_name()           # "stripe" (default)
+        >>> get_provider_name("TR")       # "iyzico" (if configured)
     """
-    payments_settings = getattr(settings, "PAYMENTS_TR", {})
-    provider = payments_settings.get("DEFAULT_PROVIDER", "stripe")
-    # Ensure provider is a string to avoid AttributeError on .lower()
-    if not isinstance(provider, str):
-        return "stripe"
-    return provider.lower()
+    if country_code:
+        return get_provider_for_country(country_code)
+    return getattr(settings, "PAYMENT_PROVIDER", "stripe").lower()
+
+
+def get_provider_for_country(country_code: str) -> str:
+    """
+    Get the provider name for a specific country.
+
+    Looks up the country in PAYMENT_PROVIDERS_BY_COUNTRY setting,
+    falls back to the default provider if country not configured.
+
+    Args:
+        country_code: ISO 3166-1 alpha-2 country code (e.g., "TR", "US")
+
+    Returns:
+        Provider name string (e.g., "stripe" or "iyzico")
+
+    Examples:
+        >>> get_provider_for_country("TR")  # "iyzico"
+        >>> get_provider_for_country("US")  # "stripe"
+        >>> get_provider_for_country("XX")  # "stripe" (default fallback)
+    """
+    providers_by_country = getattr(settings, "PAYMENT_PROVIDERS_BY_COUNTRY", {})
+    country_upper = country_code.upper()
+
+    if country_upper in providers_by_country:
+        return providers_by_country[country_upper].lower()
+
+    return getattr(settings, "PAYMENT_PROVIDER", "stripe").lower()
+
+
+def get_supported_countries() -> dict[str, str]:
+    """
+    Get all configured country-provider mappings.
+
+    Returns:
+        Dictionary mapping country codes to provider names
+
+    Example:
+        >>> get_supported_countries()
+        {"TR": "iyzico", "US": "stripe", "GB": "stripe"}
+    """
+    return dict(getattr(settings, "PAYMENT_PROVIDERS_BY_COUNTRY", {}))
+
+
+def get_available_providers() -> list[str]:
+    """
+    Get list of all registered provider names.
+
+    Returns:
+        List of provider name strings
+
+    Example:
+        >>> get_available_providers()
+        ["stripe", "iyzico"]
+    """
+    return registry.list_providers()
 
 
 def register_provider(name: str, provider_class: type[PaymentProvider]) -> None:
@@ -226,3 +375,37 @@ def is_provider_available(name: str) -> bool:
         True if provider is registered and available
     """
     return registry.is_registered(name)
+
+
+def is_iyzico_enabled(country_code: str | None = None) -> bool:
+    """
+    Check if iyzico is the payment provider.
+
+    Args:
+        country_code: Optional country code to check country-specific provider
+
+    Returns:
+        True if iyzico is the configured provider
+
+    Examples:
+        >>> is_iyzico_enabled()           # Check default
+        >>> is_iyzico_enabled("TR")       # Check for Turkey
+    """
+    return get_provider_name(country_code) == "iyzico"
+
+
+def is_stripe_enabled(country_code: str | None = None) -> bool:
+    """
+    Check if Stripe is the payment provider.
+
+    Args:
+        country_code: Optional country code to check country-specific provider
+
+    Returns:
+        True if Stripe is the configured provider
+
+    Examples:
+        >>> is_stripe_enabled()           # Check default
+        >>> is_stripe_enabled("US")       # Check for USA
+    """
+    return get_provider_name(country_code) == "stripe"

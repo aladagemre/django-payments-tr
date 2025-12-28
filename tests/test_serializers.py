@@ -1,11 +1,12 @@
 """Tests for DRF serializers."""
 
+from __future__ import annotations
+
 import pytest
 
-# Skip all tests if DRF is not installed
 pytest.importorskip("rest_framework")
 
-from payments_tr.contrib.serializers import (
+from payments_tr.contrib.serializers import (  # noqa: E402
     BuyerInfoSerializer,
     EFTPaymentCreateSerializer,
     IyzicoCallbackSerializer,
@@ -14,7 +15,7 @@ from payments_tr.contrib.serializers import (
     RefundCreateSerializer,
     RefundResultSerializer,
 )
-from payments_tr.providers.base import BuyerInfo, PaymentResult, RefundResult
+from payments_tr.providers.base import BuyerInfo, PaymentResult, RefundResult  # noqa: E402
 
 
 class TestBuyerInfoSerializer:

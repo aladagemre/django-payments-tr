@@ -15,10 +15,11 @@ import hmac
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache

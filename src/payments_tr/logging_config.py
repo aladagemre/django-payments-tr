@@ -114,7 +114,7 @@ class PaymentLogger:
         """Log payment creation."""
         self._log_with_context(
             logging.INFO,
-            f"Payment created: {payment_id} - {amount/100:.2f} {currency}",
+            f"Payment created: {payment_id} - {amount / 100:.2f} {currency}",
             payment_id=payment_id,
             provider=provider,
             operation="create",
@@ -170,7 +170,7 @@ class PaymentLogger:
         **extra: Any,
     ) -> None:
         """Log refund creation."""
-        amount_str = f"{amount/100:.2f}" if amount is not None else "full"
+        amount_str = f"{amount / 100:.2f}" if amount is not None else "full"
         self._log_with_context(
             logging.INFO,
             f"Refund created: {payment_id} - {amount_str}",

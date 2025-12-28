@@ -214,7 +214,7 @@ class TestProviderRegistry:
         """Test getting provider instance."""
         import logging
 
-        caplog.set_level(logging.INFO)
+        caplog.set_level(logging.DEBUG)
 
         class TestProvider(PaymentProvider):
             provider_name = "test"
