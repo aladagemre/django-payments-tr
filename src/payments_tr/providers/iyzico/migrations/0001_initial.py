@@ -1,4 +1,5 @@
 import decimal
+
 import django
 import django.db.models.deletion
 from django.conf import settings

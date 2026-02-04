@@ -11,7 +11,7 @@ Supported Currencies:
 """
 
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # ============================================================================
@@ -19,7 +19,7 @@ from typing import Any
 # ============================================================================
 
 
-class Currency(str, Enum):
+class Currency(StrEnum):
     """
     Supported currency codes.
 
