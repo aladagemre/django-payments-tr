@@ -386,6 +386,7 @@ dev = [
     { name = "djangorestframework" },
     { name = "isort" },
     { name = "pre-commit" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -419,6 +420,7 @@ dev = [
     { name = "djangorestframework", specifier = ">=3.16.1" },
     { name = "isort", specifier = ">=7.0.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "ruff", specifier = ">=0.14.10" },
 ]
 
 [[package]]

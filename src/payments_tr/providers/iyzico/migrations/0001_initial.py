@@ -10,7 +10,6 @@ CHECKCONSTRAINT_PARAM = "condition" if django.VERSION >= (5, 1) else "check"
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -206,9 +205,14 @@ class Migration(migrations.Migration):
                 "db_table": "iyzico_payment_methods",
                 "ordering": ["-is_default", "-created_at"],
                 "indexes": [
-                    models.Index(fields=["user", "is_active", "is_default"], name="iyzico_pm_user_active_default_idx"),
+                    models.Index(
+                        fields=["user", "is_active", "is_default"],
+                        name="iyzico_pm_user_active_default_idx",
+                    ),
                     models.Index(fields=["card_token"], name="iyzico_pm_card_token_idx"),
-                    models.Index(fields=["expiry_year", "expiry_month"], name="iyzico_pm_expiry_idx"),
+                    models.Index(
+                        fields=["expiry_year", "expiry_month"], name="iyzico_pm_expiry_idx"
+                    ),
                 ],
                 "constraints": [
                     models.UniqueConstraint(
@@ -290,9 +294,7 @@ class Migration(migrations.Migration):
                     "billing_interval_count",
                     models.PositiveIntegerField(
                         default=1,
-                        help_text=(
-                            "Number of intervals between billings (e.g., 3 months)"
-                        ),
+                        help_text=("Number of intervals between billings (e.g., 3 months)"),
                         validators=[MinValueValidator(1)],
                     ),
                 ),
@@ -349,7 +351,10 @@ class Migration(migrations.Migration):
                 "db_table": "iyzico_subscription_plans",
                 "ordering": ["sort_order", "price"],
                 "indexes": [
-                    models.Index(fields=["is_active", "billing_interval"], name="iyzico_plan_active_interval_idx"),
+                    models.Index(
+                        fields=["is_active", "billing_interval"],
+                        name="iyzico_plan_active_interval_idx",
+                    ),
                     models.Index(fields=["slug"], name="iyzico_plan_slug_idx"),
                 ],
             },
@@ -513,9 +518,15 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
                 "indexes": [
                     models.Index(fields=["user", "status"], name="iyzico_sub_user_status_idx"),
-                    models.Index(fields=["status", "next_billing_date"], name="iyzico_sub_status_next_bill_idx"),
+                    models.Index(
+                        fields=["status", "next_billing_date"],
+                        name="iyzico_sub_status_next_bill_idx",
+                    ),
                     models.Index(fields=["plan", "status"], name="iyzico_sub_plan_status_idx"),
-                    models.Index(fields=["cancel_at_period_end", "current_period_end"], name="iyzico_sub_cancel_period_end_idx"),
+                    models.Index(
+                        fields=["cancel_at_period_end", "current_period_end"],
+                        name="iyzico_sub_cancel_period_end_idx",
+                    ),
                 ],
                 "constraints": [
                     models.CheckConstraint(
@@ -671,9 +682,7 @@ class Migration(migrations.Migration):
                     "raw_response",
                     models.JSONField(
                         blank=True,
-                        help_text=(
-                            "Complete response from provider API (for debugging and audit)"
-                        ),
+                        help_text=("Complete response from provider API (for debugging and audit)"),
                         null=True,
                         verbose_name="Raw Response",
                     ),
@@ -749,9 +758,7 @@ class Migration(migrations.Migration):
                     "card_association",
                     models.CharField(
                         blank=True,
-                        help_text=(
-                            "Card association (e.g., VISA, MASTER_CARD, AMEX)"
-                        ),
+                        help_text=("Card association (e.g., VISA, MASTER_CARD, AMEX)"),
                         max_length=50,
                         null=True,
                         verbose_name="Card Association",
@@ -791,9 +798,7 @@ class Migration(migrations.Migration):
                     "bin_number",
                     models.CharField(
                         blank=True,
-                        help_text=(
-                            "First 6 digits of card (Bank Identification Number)"
-                        ),
+                        help_text=("First 6 digits of card (Bank Identification Number)"),
                         max_length=6,
                         null=True,
                         verbose_name="BIN Number",
@@ -927,23 +932,51 @@ class Migration(migrations.Migration):
                 "db_table": "iyzico_subscription_payments",
                 "ordering": ["-created_at"],
                 "indexes": [
-                    models.Index(fields=["provider_payment_id"], name="iyzico_subpay_provider_payment_id_idx"),
+                    models.Index(
+                        fields=["provider_payment_id"], name="iyzico_subpay_provider_payment_id_idx"
+                    ),
                     models.Index(fields=["provider"], name="iyzico_subpay_provider_idx"),
                     models.Index(fields=["status"], name="iyzico_subpay_status_idx"),
                     models.Index(fields=["created_at"], name="iyzico_subpay_created_at_idx"),
                     models.Index(fields=["-created_at"], name="iyzico_subpay_created_at_desc_idx"),
                     models.Index(fields=["buyer_email"], name="iyzico_subpay_buyer_email_idx"),
-                    models.Index(fields=["provider", "status"], name="iyzico_subpay_provider_status_idx"),
-                    models.Index(fields=["status", "created_at"], name="iyzico_subpay_status_created_idx"),
-                    models.Index(fields=["provider_payment_id", "status"], name="iyzico_subpay_provider_payment_status_idx"),
-                    models.Index(fields=["buyer_email", "status"], name="iyzico_subpay_buyer_email_status_idx"),
-                    models.Index(fields=["currency", "status", "created_at"], name="iyzico_subpay_currency_status_created_idx"),
-                    models.Index(fields=["conversation_id"], name="iyzico_subpay_conversation_id_idx"),
+                    models.Index(
+                        fields=["provider", "status"], name="iyzico_subpay_provider_status_idx"
+                    ),
+                    models.Index(
+                        fields=["status", "created_at"], name="iyzico_subpay_status_created_idx"
+                    ),
+                    models.Index(
+                        fields=["provider_payment_id", "status"],
+                        name="iyzico_subpay_provider_payment_status_idx",
+                    ),
+                    models.Index(
+                        fields=["buyer_email", "status"],
+                        name="iyzico_subpay_buyer_email_status_idx",
+                    ),
+                    models.Index(
+                        fields=["currency", "status", "created_at"],
+                        name="iyzico_subpay_currency_status_created_idx",
+                    ),
+                    models.Index(
+                        fields=["conversation_id"], name="iyzico_subpay_conversation_id_idx"
+                    ),
                     models.Index(fields=["token"], name="iyzico_subpay_token_idx"),
-                    models.Index(fields=["card_association", "status"], name="iyzico_subpay_card_assoc_status_idx"),
-                    models.Index(fields=["subscription", "status"], name="iyzico_subpay_subscription_status_idx"),
-                    models.Index(fields=["period_start", "period_end"], name="iyzico_subpay_period_range_idx"),
-                    models.Index(fields=["attempt_number", "is_retry"], name="iyzico_subpay_attempt_retry_idx"),
+                    models.Index(
+                        fields=["card_association", "status"],
+                        name="iyzico_subpay_card_assoc_status_idx",
+                    ),
+                    models.Index(
+                        fields=["subscription", "status"],
+                        name="iyzico_subpay_subscription_status_idx",
+                    ),
+                    models.Index(
+                        fields=["period_start", "period_end"], name="iyzico_subpay_period_range_idx"
+                    ),
+                    models.Index(
+                        fields=["attempt_number", "is_retry"],
+                        name="iyzico_subpay_attempt_retry_idx",
+                    ),
                 ],
                 "constraints": [
                     models.UniqueConstraint(
