@@ -331,19 +331,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-iyzico"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-    { name = "iyzipay" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/45/d8/0c19eeaf6324df574c7d62943e300d99b06abd2451b1ec2e1b454846c79f/django_iyzico-0.2.1.tar.gz", hash = "sha256:1198a6d20b6514f6b0d44b6b9e139c77d9df6c84749b026cd5d63855418a7957", size = 118745, upload-time = "2025-12-20T11:34:10.62Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/af/94784612798bda317bb98939c31a59b672a6cdb4fbb90378daaab73f6871/django_iyzico-0.2.1-py3-none-any.whl", hash = "sha256:f9ff535583d04dc8a80ae11603021f49ce18fff67bb88115041a68039e6f46ce", size = 113739, upload-time = "2025-12-20T11:34:09.276Z" },
-]
-
-[[package]]
 name = "django-payments-tr"
 version = "0.3.1"
 source = { editable = "." }
@@ -382,8 +369,6 @@ stripe = [
 dev = [
     { name = "bandit" },
     { name = "black" },
-    { name = "django-iyzico" },
-    { name = "djangorestframework" },
     { name = "isort" },
     { name = "pre-commit" },
     { name = "ruff" },
@@ -416,8 +401,6 @@ provides-extras = ["iyzico", "stripe", "all", "dev"]
 dev = [
     { name = "bandit", specifier = ">=1.9.2" },
     { name = "black", specifier = ">=25.12.0" },
-    { name = "django-iyzico", specifier = ">=0.2" },
-    { name = "djangorestframework", specifier = ">=3.16.1" },
     { name = "isort", specifier = ">=7.0.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "ruff", specifier = ">=0.14.10" },
