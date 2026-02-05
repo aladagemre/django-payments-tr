@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-02-05
+
+### Fixed
+
+- Add migration to rename iyzico subscription indexes to Django's auto-generated naming convention and remove unused SubscriptionPayment indexes.
+
 ## [0.3.1] - 2026-02-04
 
 ### Fixed
@@ -118,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional: `iyzipay` for iyzico integration (embedded client included)
 - Optional: `stripe` for Stripe integration
 
+[0.3.2]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.3.2
 [0.3.1]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.3.1
 [0.3.0]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.3.0
 [0.2.0]: https://github.com/aladagemre/django-payments-tr/releases/tag/v0.2.0
