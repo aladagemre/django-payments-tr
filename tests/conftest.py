@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures."""
 
 import os
+from dataclasses import dataclass
 
 import django
 import pytest
@@ -41,18 +42,13 @@ def buyer_info_data():
     }
 
 
+@dataclass
 class MockPayment:
     """Mock payment object for testing."""
 
-    def __init__(
-        self,
-        id: int = 1,
-        amount: int = 10000,
-        currency: str = "TRY",
-    ):
-        self.id = id
-        self.amount = amount
-        self.currency = currency
+    id: int = 1
+    amount: int = 10000
+    currency: str = "TRY"
 
 
 @pytest.fixture
