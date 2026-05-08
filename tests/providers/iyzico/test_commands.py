@@ -430,7 +430,7 @@ class TestCleanupOldPaymentsCommand:
                 "cleanup_old_payments",
                 model=f"tests.providers.iyzico.models.{payment_model.__name__}",
                 days=365,
-            keep_successful=1825,
+                keep_successful=1825,
                 stdout=out,
             )
 
@@ -449,7 +449,7 @@ class TestCleanupOldPaymentsCommand:
                 "cleanup_old_payments",
                 model="invalid.Model",
                 days=365,
-            keep_successful=1825,
+                keep_successful=1825,
                 no_input=True,
             )
 

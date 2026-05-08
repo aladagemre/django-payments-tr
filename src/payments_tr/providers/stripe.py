@@ -182,8 +182,7 @@ class StripeProvider(PaymentProvider):
                 provider_currency = (intent.currency or "").lower()
                 if provider_currency != expected_currency.lower():
                     logger.error(
-                        "Stripe currency mismatch: expected=%s provider=%s "
-                        "intent_id=%s",
+                        "Stripe currency mismatch: expected=%s provider=%s intent_id=%s",
                         expected_currency,
                         provider_currency,
                         intent.id,
@@ -201,8 +200,7 @@ class StripeProvider(PaymentProvider):
                     )
                 if int(intent.amount) != int(expected_amount):
                     logger.error(
-                        "Stripe amount mismatch: expected=%d provider=%d "
-                        "intent_id=%s",
+                        "Stripe amount mismatch: expected=%d provider=%d intent_id=%s",
                         expected_amount,
                         intent.amount,
                         intent.id,

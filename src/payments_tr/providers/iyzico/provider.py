@@ -244,8 +244,7 @@ class IyzicoProvider(PaymentProvider):
         provider_currency = (response.currency or "").upper()
         if provider_currency != expected_currency.upper():
             logger.error(
-                "Iyzico currency mismatch: expected=%s provider=%s "
-                "payment_id=%s",
+                "Iyzico currency mismatch: expected=%s provider=%s payment_id=%s",
                 expected_currency,
                 provider_currency,
                 response.payment_id,
@@ -277,8 +276,7 @@ class IyzicoProvider(PaymentProvider):
         expected_decimal = Decimal(int(expected_amount)) / Decimal(100)
         if paid_price != expected_decimal:
             logger.error(
-                "Iyzico amount mismatch: expected=%s provider=%s "
-                "payment_id=%s",
+                "Iyzico amount mismatch: expected=%s provider=%s payment_id=%s",
                 expected_decimal,
                 paid_price,
                 response.payment_id,

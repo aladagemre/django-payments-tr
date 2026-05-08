@@ -398,9 +398,7 @@ class TestStripeTOCTOU:
         )
         assert result.success is True
 
-    def test_processing_status_with_amount_match_succeeds(
-        self, stripe_provider, mock_stripe
-    ):
+    def test_processing_status_with_amount_match_succeeds(self, stripe_provider, mock_stripe):
         mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
             status="processing", amount=10000, currency="usd"
         )

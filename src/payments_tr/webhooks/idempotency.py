@@ -162,8 +162,7 @@ def record_webhook_or_skip(
         # Race: another worker inserted between get and create.
         # Fall back to the existing row.
         logger.info(
-            "Webhook idempotency race resolved by IntegrityError fallback "
-            "for event_id=%s",
+            "Webhook idempotency race resolved by IntegrityError fallback for event_id=%s",
             event_id,
         )
         event = model.objects.get(event_id=event_id)
@@ -171,8 +170,7 @@ def record_webhook_or_skip(
 
     if not created:
         logger.info(
-            "Duplicate webhook ignored: provider=%s event_id=%s "
-            "(first seen at %s)",
+            "Duplicate webhook ignored: provider=%s event_id=%s (first seen at %s)",
             provider,
             event_id,
             getattr(event, "created_at", "?"),

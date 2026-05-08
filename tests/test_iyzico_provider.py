@@ -362,9 +362,7 @@ class TestIyzicoTOCTOU:
         )
         assert result.success is True
 
-    def test_no_expected_values_warns_and_passes(
-        self, iyzico_provider, mock_iyzico_client, caplog
-    ):
+    def test_no_expected_values_warns_and_passes(self, iyzico_provider, mock_iyzico_client, caplog):
         import logging
 
         with caplog.at_level(logging.WARNING):
@@ -372,9 +370,7 @@ class TestIyzicoTOCTOU:
         assert result.success is True
         assert any("TOCTOU" in r.message for r in caplog.records)
 
-    def test_amount_missing_in_response_rejects(
-        self, iyzico_provider, mock_iyzico_client
-    ):
+    def test_amount_missing_in_response_rejects(self, iyzico_provider, mock_iyzico_client):
         from unittest.mock import MagicMock
 
         bad_response = MockCheckoutFormResultResponse(success=True)

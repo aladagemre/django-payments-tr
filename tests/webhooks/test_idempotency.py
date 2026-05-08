@@ -24,10 +24,7 @@ class TestBuildIdempotencyKey:
             event_type="payment_intent.succeeded",
             provider_payment_id="evt_xyz",
         )
-        assert (
-            build_idempotency_key("stripe", result)
-            == "stripe:evt_xyz:payment_intent.succeeded"
-        )
+        assert build_idempotency_key("stripe", result) == "stripe:evt_xyz:payment_intent.succeeded"
 
     def test_provider_prefix_prevents_cross_provider_collision(self):
         # Different providers may emit the same internal id; the prefix
