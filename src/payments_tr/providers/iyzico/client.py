@@ -8,7 +8,7 @@ handling configuration, error translation, and response normalization.
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import iyzipay
@@ -27,6 +27,135 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _to_decimal(value: Any, *, field: str, item_index: int | None = None) -> Decimal:
+    """
+    Convert an Iyzico price-like value to ``Decimal``.
+
+    Iyzico accepts both ``str`` and numeric forms in basket items. We normalise
+    to ``Decimal`` so marketplace sum/per-item comparisons can't drift on
+    floating-point arithmetic. ``ValidationError`` is raised on bad inputs to
+    keep the call site free of try/except clutter.
+    """
+    where = f"basketItems[{item_index}].{field}" if item_index is not None else field
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as e:
+        raise ValidationError(
+            f"Invalid {where} value: {value!r}",
+            error_code="INVALID_MARKETPLACE_PRICE",
+        ) from e
+
+
+def validate_marketplace_basket(
+    basket_items: list[dict[str, Any]],
+    paid_price: Any,
+    *,
+    strict: bool = False,
+) -> None:
+    """
+    Validate marketplace (sub-merchant) routing on a checkout-form basket.
+
+    Iyzico's marketplace flow ("işyeri gelir paylaşımı") splits each basket
+    item between the platform and a sub-merchant via ``subMerchantKey`` /
+    ``subMerchantPrice``. The two fields are required together on every item
+    that is marketplace-routed; ``subMerchantPrice`` must not exceed the item
+    ``price``; and the sum of all ``subMerchantPrice`` values must not exceed
+    the order's ``paidPrice`` (otherwise the platform commission is negative).
+
+    Args:
+        basket_items: Basket items as posted to Iyzico. May contain a mix of
+            marketplace-routed and platform-only items unless ``strict``.
+        paid_price: Order-level ``paidPrice`` (string, Decimal, int, float).
+        strict: When ``True`` (provider ``marketplace=True`` mode), every
+            item MUST carry both marketplace fields. When ``False`` (default,
+            client-level) a mixed basket is accepted — Iyzico keeps full
+            revenue on the non-marketplace items.
+
+    Raises:
+        ValidationError: If any of the marketplace invariants are violated.
+    """
+    if not basket_items:
+        return
+
+    paid_price_decimal = _to_decimal(paid_price, field="paidPrice")
+    sub_merchant_total = Decimal("0")
+    seen_marketplace = False
+
+    for index, item in enumerate(basket_items):
+        sub_merchant_key = item.get("subMerchantKey")
+        sub_merchant_price = item.get("subMerchantPrice")
+
+        # Treat the empty string the same as missing — the bare iyzipay SDK
+        # forwards it as "" and the gateway silently treats the item as
+        # platform-only. We make that explicit so callers don't get a
+        # surprise revenue share of zero on a typo'd seller key.
+        has_key = sub_merchant_key is not None and sub_merchant_key != ""
+        has_price = sub_merchant_price is not None and sub_merchant_price != ""
+
+        if not has_key and not has_price:
+            if strict:
+                raise ValidationError(
+                    f"basketItems[{index}] is missing subMerchantKey/"
+                    "subMerchantPrice (marketplace=True requires every item "
+                    "to be sub-merchant routed)",
+                    error_code="MARKETPLACE_ITEM_MISSING_SUBMERCHANT",
+                )
+            continue
+
+        if not has_key or not has_price:
+            raise ValidationError(
+                f"basketItems[{index}] must specify both subMerchantKey and "
+                "subMerchantPrice together; received "
+                f"key={'set' if has_key else 'missing'}, "
+                f"price={'set' if has_price else 'missing'}",
+                error_code="MARKETPLACE_FIELDS_INCOMPLETE",
+            )
+
+        # Empty/whitespace key — reject explicitly. The bare SDK silently
+        # no-ops; we want a loud failure.
+        if not str(sub_merchant_key).strip():
+            raise ValidationError(
+                f"basketItems[{index}].subMerchantKey is empty",
+                error_code="MARKETPLACE_EMPTY_SUBMERCHANT_KEY",
+            )
+
+        seen_marketplace = True
+        sub_merchant_value = _to_decimal(
+            sub_merchant_price, field="subMerchantPrice", item_index=index
+        )
+        if sub_merchant_value < 0:
+            raise ValidationError(
+                f"basketItems[{index}].subMerchantPrice cannot be negative",
+                error_code="MARKETPLACE_NEGATIVE_SUBMERCHANT_PRICE",
+            )
+
+        item_price = item.get("price")
+        if item_price is None:
+            raise ValidationError(
+                f"basketItems[{index}].price is required for marketplace items",
+                error_code="MARKETPLACE_ITEM_PRICE_MISSING",
+            )
+        item_price_decimal = _to_decimal(item_price, field="price", item_index=index)
+
+        if sub_merchant_value > item_price_decimal:
+            raise ValidationError(
+                f"basketItems[{index}].subMerchantPrice ({sub_merchant_value}) "
+                f"exceeds item price ({item_price_decimal})",
+                error_code="MARKETPLACE_SUBMERCHANT_EXCEEDS_ITEM_PRICE",
+            )
+
+        sub_merchant_total += sub_merchant_value
+
+    # Sum guard only matters once at least one item is marketplace-routed.
+    if seen_marketplace and sub_merchant_total > paid_price_decimal:
+        raise ValidationError(
+            f"Sum of subMerchantPrice ({sub_merchant_total}) exceeds order "
+            f"paidPrice ({paid_price_decimal}); platform commission would be "
+            "negative",
+            error_code="MARKETPLACE_SUBMERCHANT_SUM_EXCEEDS_PAID_PRICE",
+        )
 
 
 class BaseIyzicoResponse:
@@ -185,6 +314,19 @@ class RefundResponse(BaseIyzicoResponse):
     @property
     def refund_id(self) -> str | None:
         """Get Iyzico refund ID."""
+        return self.raw_response.get("paymentTransactionId")
+
+    @property
+    def payment_transaction_id(self) -> str | None:
+        """
+        Get the item-level transaction ID this refund applied to.
+
+        Marketplace refunds attribute the refund to a specific basket item's
+        ``paymentTransactionId`` (which corresponds to one sub-merchant's
+        share). This property exposes that identifier for callers that need
+        to track per-item refund flow; for non-marketplace refunds Iyzico
+        echoes the same ``paymentTransactionId`` that ``refund_id`` returns.
+        """
         return self.raw_response.get("paymentTransactionId")
 
     def __str__(self) -> str:
@@ -628,6 +770,7 @@ class IyzicoClient:
         basket_items: list[dict[str, Any]] | None = None,
         callback_url: str | None = None,
         enabled_installments: list[int] | None = None,
+        marketplace: bool = False,
     ) -> CheckoutFormResponse:
         """
         Create a checkout form for redirect-based payment.
@@ -643,6 +786,12 @@ class IyzicoClient:
             basket_items: Basket items (optional)
             callback_url: URL where iyzico redirects after payment
             enabled_installments: List of installment options (e.g., [1, 2, 3, 6, 9, 12])
+            marketplace: When ``True`` enables strict marketplace mode —
+                every basket item must carry both ``subMerchantKey`` and
+                ``subMerchantPrice``. When ``False`` (default), marketplace
+                routing is detected per-item and validated only for those
+                items; mixed baskets are accepted (Iyzico keeps full revenue
+                on the platform-only items).
 
         Returns:
             CheckoutFormResponse with token and checkout form content/URL
@@ -714,7 +863,23 @@ class IyzicoClient:
 
         # Add basket items if provided
         if basket_items:
+            # Marketplace validation runs even when ``marketplace=False`` so
+            # that any item carrying sub-merchant fields is still checked
+            # for the per-item / sum invariants. Strict mode escalates the
+            # check to "every item must be marketplace-routed".
+            validate_marketplace_basket(basket_items, request_data["paidPrice"], strict=marketplace)
             request_data["basketItems"] = basket_items
+        elif marketplace:
+            # We deliberately refuse to fall back to a synthetic single-item
+            # basket in marketplace mode — there is no sensible default
+            # ``subMerchantKey`` to invent, and silently routing 100% of
+            # revenue to the platform would violate the caller's intent.
+            raise ValidationError(
+                "marketplace=True requires explicit basket_items with "
+                "sub-merchant fields; the default single-item fallback is "
+                "rejected to prevent accidental platform-only routing.",
+                error_code="MARKETPLACE_REQUIRES_BASKET_ITEMS",
+            )
 
         # Log request
         logger.info(
@@ -831,15 +996,24 @@ class IyzicoClient:
         ip_address: str,
         amount: Decimal | None = None,
         reason: str | None = None,
+        payment_transaction_id: str | None = None,
     ) -> RefundResponse:
         """
         Refund a payment through Iyzico.
 
         Args:
-            payment_id: Iyzico payment ID to refund
+            payment_id: Iyzico payment ID to refund. For non-marketplace
+                payments this is the only identifier needed.
             ip_address: IP address initiating the refund (required for audit)
             amount: Amount to refund (None for full refund)
             reason: Optional refund reason
+            payment_transaction_id: Item-level transaction ID. Required for
+                attributing a marketplace refund to the correct
+                sub-merchant share (refunds the seller's portion, not the
+                platform commission). When provided, Iyzico is called with
+                this value as ``paymentTransactionId``; otherwise we fall
+                back to ``payment_id`` for backward compatibility with
+                non-marketplace flows.
 
         Returns:
             RefundResponse object
@@ -885,18 +1059,28 @@ class IyzicoClient:
                 error_code="INVALID_IP_ADDRESS",
             ) from e
 
-        # Build request data
+        # Build request data — prefer item-level transaction id when given
+        # (marketplace flows), otherwise fall back to the order-level id
+        # for backward compatibility with non-marketplace payments.
+        refund_target = payment_transaction_id or payment_id
         request_data = {
-            "paymentTransactionId": payment_id,
+            "paymentTransactionId": refund_target,
             "ip": ip_address,
         }
 
         # Add amount for partial refund
         if amount is not None:
             request_data["price"] = format_price(amount)
-            logger.info(f"Initiating partial refund - payment_id={payment_id}, amount={amount}")
+            logger.info(
+                f"Initiating partial refund - payment_id={payment_id}, "
+                f"transaction_id={payment_transaction_id or '(same as payment_id)'}, "
+                f"amount={amount}"
+            )
         else:
-            logger.info(f"Initiating full refund - payment_id={payment_id}")
+            logger.info(
+                f"Initiating full refund - payment_id={payment_id}, "
+                f"transaction_id={payment_transaction_id or '(same as payment_id)'}"
+            )
 
         # Add reason if provided
         if reason:
