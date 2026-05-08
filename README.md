@@ -274,6 +274,90 @@ class PayTRProvider(PaymentProvider):
 register_provider("paytr", PayTRProvider)
 ```
 
+## Marketplace (sub-merchant) payments
+
+For marketplace apps that need to split each basket item between the
+platform and a seller, `django-payments-tr` v0.5.0+ ships first-class
+support for Iyzico's marketplace flow ("işyeri gelir paylaşımı"). See
+[`docs/marketplace.md`](docs/marketplace.md) for the full walkthrough.
+
+### Register a sub-merchant once
+
+```python
+from payments_tr.providers.iyzico import SubMerchantClient, SubMerchantType
+
+client = SubMerchantClient()
+resp = client.create(
+    external_id="station-42",
+    sub_merchant_type=SubMerchantType.LIMITED_OR_JOINT_STOCK_COMPANY,
+    legal_company_title="Acme Print AŞ",
+    contact_name="Aslı",
+    contact_surname="Yılmaz",
+    email="acme@example.com",
+    gsm_number="+905551234567",
+    iban="TR330006100519786457841326",   # validated via validate_iban_tr
+    tax_office="Beşiktaş",
+    tax_number="1234567890",             # validated via validate_vkn
+)
+seller.iyzico_sub_merchant_key = resp.sub_merchant_key
+```
+
+The `AbstractSubMerchantOwner` model mixin provides ready-made storage
+fields and a `clean()` validator:
+
+```python
+from payments_tr.providers.iyzico.models import AbstractSubMerchantOwner
+
+class PrintStation(AbstractSubMerchantOwner):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+```
+
+### Create a marketplace payment
+
+A multi-file order routed to a single seller (typical print-shop flow):
+
+```python
+basket_items = [
+    {
+        "id": str(f.id),
+        "name": f.original_filename[:100],
+        "category1": "Baskı Hizmeti",
+        "itemType": "PHYSICAL",
+        "price": str(f.subtotal),
+        "subMerchantKey": order.station.iyzico_sub_merchant_key,
+        "subMerchantPrice": str(f.station_earnings),  # platform commission deducted
+    }
+    for f in order.files.all()
+]
+
+result = provider.create_payment(
+    payment,
+    callback_url="https://example.com/callback/",
+    buyer_info={"email": "customer@example.com", ...},
+    basket_items=basket_items,
+    marketplace=True,            # strict: every item must be sub-merchant routed
+)
+```
+
+Mixed baskets (some marketplace, some platform-only) are accepted when
+you omit `marketplace=True` — Iyzico keeps full revenue on the unrouted
+items.
+
+### Refund a single item's seller share
+
+```python
+provider.create_refund(
+    payment,
+    amount=item.sub_merchant_price * 100,            # kuruş
+    payment_transaction_id=item.payment_transaction_id,
+    ip_address=request.META["REMOTE_ADDR"],
+)
+```
+
+Without `payment_transaction_id` the refund targets the order-level
+payment id — same behaviour as non-marketplace refunds.
+
 ## DRF Serializers
 
 ```python
