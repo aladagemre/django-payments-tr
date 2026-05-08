@@ -700,13 +700,13 @@ class TestVerifyWebhookSignature:
 
         assert verify_webhook_signature(payload, "invalid-signature", secret) is False
 
-    def test_no_secret_configured_returns_true_with_warning(self):
-        """Test that missing secret logs warning but allows."""
+    def test_no_secret_configured_fails_closed(self):
+        """Missing secret must fail-closed (was fail-open prior to v0.4.0)."""
         payload = b'{"test": "data"}'
 
-        # Empty secret should return True (no validation)
+        # Empty secret must reject — silent acceptance is a security hole.
         result = verify_webhook_signature(payload, "any-signature", "")
-        assert result is True
+        assert result is False
 
     def test_no_signature_provided_returns_false(self):
         """Test that missing signature is rejected."""
@@ -944,3 +944,47 @@ class TestGetClientIp:
         # No REMOTE_ADDR set at all
         request.META.pop("REMOTE_ADDR", None)
         assert get_client_ip(request, trust_xff=False) == ""
+
+
+class TestSanitizeLogDataPIIExpansion:
+    """v0.4.0: PII (TCKN, phone, email, address) is now masked in logs."""
+
+    def test_tckn_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        data = {"identityNumber": "12345678901", "buyer_id": 42}
+        out = sanitize_log_data(data)
+        assert out["identityNumber"] == "***REDACTED***"
+        assert out["buyer_id"] == 42
+
+    def test_gsm_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        out = sanitize_log_data({"gsmNumber": "+905551234567"})
+        assert out["gsmNumber"] == "***REDACTED***"
+
+    def test_email_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        out = sanitize_log_data({"buyer_email": "test@example.com"})
+        assert out["buyer_email"] == "***REDACTED***"
+
+    def test_address_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        out = sanitize_log_data({"registrationAddress": "1 Main St, Istanbul"})
+        assert out["registrationAddress"] == "***REDACTED***"
+
+    def test_nested_pii_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        data = {"buyer": {"identityNumber": "12345678901", "name": "Ada"}}
+        out = sanitize_log_data(data)
+        assert out["buyer"]["identityNumber"] == "***REDACTED***"
+        assert out["buyer"]["name"] == "Ada"
+
+    def test_webhook_secret_redacted(self):
+        from payments_tr.providers.iyzico.utils import sanitize_log_data
+
+        out = sanitize_log_data({"webhook_secret": "wh_test_xxx"})
+        assert out["webhook_secret"] == "***REDACTED***"

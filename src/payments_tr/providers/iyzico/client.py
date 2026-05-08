@@ -17,6 +17,7 @@ from .exceptions import CardError, PaymentError, ThreeDSecureError, ValidationEr
 from .settings import iyzico_settings
 from .utils import (
     extract_card_info,
+    fingerprint_token,
     format_address_data,
     format_buyer_data,
     format_price,
@@ -229,7 +230,7 @@ class CheckoutFormResponse(BaseIyzicoResponse):
 
     def __str__(self) -> str:
         """String representation."""
-        return f"CheckoutFormResponse(status={self.status}, token={self.token[:8] if self.token else None}...)"
+        return f"CheckoutFormResponse(status={self.status}, token={fingerprint_token(self.token)})"
 
     def __repr__(self) -> str:
         """Developer representation."""
@@ -578,7 +579,7 @@ class IyzicoClient:
                 error_code="MISSING_TOKEN",
             )
 
-        logger.info(f"Completing 3DS payment - token_prefix={token[:6]}***")
+        logger.info(f"Completing 3DS payment - token={fingerprint_token(token)}")
 
         try:
             # Call Iyzico 3DS completion API
@@ -733,7 +734,7 @@ class IyzicoClient:
             # Log response
             if response.is_successful():
                 logger.info(
-                    f"Checkout form created - token={response.token[:8] if response.token else None}..., "
+                    f"Checkout form created - token={fingerprint_token(response.token)}, "
                     f"conversation_id={response.conversation_id}"
                 )
             else:
@@ -791,7 +792,7 @@ class IyzicoClient:
                 error_code="MISSING_TOKEN",
             )
 
-        logger.info(f"Retrieving checkout form result - token_prefix={token[:8]}***")
+        logger.info(f"Retrieving checkout form result - token={fingerprint_token(token)}")
 
         try:
             # Call Iyzico Checkout Form Retrieve API

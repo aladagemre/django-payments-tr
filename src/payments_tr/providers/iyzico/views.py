@@ -16,7 +16,13 @@ from .client import IyzicoClient
 from .exceptions import ThreeDSecureError
 from .settings import iyzico_settings
 from .signals import threeds_completed, threeds_failed, webhook_received
-from .utils import get_client_ip, is_ip_allowed, verify_webhook_signature
+from .utils import (
+    fingerprint_token,
+    get_client_ip,
+    is_ip_allowed,
+    sanitize_log_data,
+    verify_webhook_signature,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +156,7 @@ def threeds_callback_view(request: HttpRequest) -> HttpResponse:
             error_code="PAYMENT_FAILED",
         )
 
-    # Safe token logging - check length before accessing prefix
-    token_log = f"token_prefix={token[:6]}***" if len(token) >= 6 else "token=<too_short>"
-    logger.info(f"3DS callback received - {token_log}")
+    logger.info(f"3DS callback received - token={fingerprint_token(token)}")
 
     try:
         # Complete 3D Secure payment
@@ -383,8 +387,8 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
             f"conversation_id={conversation_id}"
         )
 
-        # Log full webhook data (for debugging)
-        logger.debug(f"Webhook data: {webhook_data}")
+        # Log full webhook data — sanitized to drop card data and PII.
+        logger.debug("Webhook data: %s", sanitize_log_data(webhook_data))
 
         # Trigger signal for webhook processing
         # Users should connect to this signal to handle webhooks

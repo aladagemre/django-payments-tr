@@ -1094,8 +1094,10 @@ class TestCheckoutFormResponse:
         str_repr = str(response)
 
         assert "success" in str_repr
-        # Token is truncated to first 8 chars with "..."
-        assert "checkout" in str_repr
+        # Token is now logged as a SHA-256 fingerprint, never as a prefix
+        # of the real token, to prevent bearer-credential leakage in logs.
+        assert "checkout-token-abc123" not in str_repr
+        assert "sha256:" in str_repr
 
 
 class TestCheckoutFormResultResponse:
