@@ -256,6 +256,18 @@ class TestIyzicoProvider:
 
         assert result.success is False
 
+    def test_supports_alternative_webhook_auth_true(self, iyzico_provider):
+        """Iyzico must declare alternative auth so signature=None is accepted."""
+        assert iyzico_provider._supports_alternative_webhook_auth() is True
+
+    def test_handle_webhook_no_signature_does_not_raise(self, iyzico_provider):
+        """Iyzico's alternative-auth opt-in lets handle_webhook skip the base check."""
+        payload = b'{"token": "test_token"}'
+
+        result = iyzico_provider.handle_webhook(payload, signature=None)
+
+        assert result.success is True
+
     def test_get_payment_status(self, iyzico_provider):
         """Test getting payment status."""
         status = iyzico_provider.get_payment_status("test_token")

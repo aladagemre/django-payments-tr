@@ -176,7 +176,11 @@ class MockPaymentProvider(PaymentProvider):
             status="succeeded",
         )
 
-    def handle_webhook(
+    def _supports_alternative_webhook_auth(self) -> bool:
+        """Mocks bypass real auth so callers can omit signatures in tests."""
+        return True
+
+    def _process_webhook(
         self,
         payload: bytes | dict[str, Any],
         signature: str | None = None,

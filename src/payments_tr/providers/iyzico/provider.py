@@ -263,22 +263,29 @@ class IyzicoProvider(PaymentProvider):
                 error_code=error_code,
             )
 
-    def handle_webhook(
+    def _supports_alternative_webhook_auth(self) -> bool:
+        """Iyzico uses server-side token retrieval for webhook authentication."""
+        return True
+
+    def _process_webhook(
         self,
         payload: bytes | dict[str, Any],
         signature: str | None = None,
         **kwargs: Any,
     ) -> WebhookResult:
         """
-        Handle an iyzico callback/webhook.
+        Process an iyzico callback.
 
-        iyzico uses callback URLs rather than webhooks. The callback
-        is received after the user completes payment on iyzico's page.
+        iyzico uses callback URLs rather than HMAC-signed webhooks. The
+        callback is received after the user completes payment on iyzico's
+        page; authentication is performed via the server-side
+        ``confirm_payment`` API call (token retrieval), declared by
+        :meth:`_supports_alternative_webhook_auth` returning ``True``.
 
         Args:
-            payload: Callback data (as bytes or parsed dict in kwargs)
-            signature: Not used by iyzico (no signature verification)
-            **kwargs: Additional data including 'token'
+            payload: Callback data (bytes or parsed dict)
+            signature: Ignored (always None for iyzico).
+            **kwargs: Additional data including 'token'.
 
         Returns:
             WebhookResult with event details

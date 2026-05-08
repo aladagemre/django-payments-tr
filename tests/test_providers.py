@@ -142,7 +142,7 @@ class TestProviderRegistry:
             def create_refund(self, payment, amount=None, reason="", **kwargs):
                 return RefundResult(success=True)
 
-            def handle_webhook(self, payload, signature=None, **kwargs):
+            def _process_webhook(self, payload, signature=None, **kwargs):
                 return WebhookResult(success=True)
 
             def get_payment_status(self, provider_payment_id):
@@ -173,7 +173,7 @@ class TestProviderRegistry:
             def create_refund(self, payment, amount=None, reason="", **kwargs):
                 pass
 
-            def handle_webhook(self, payload, signature=None, **kwargs):
+            def _process_webhook(self, payload, signature=None, **kwargs):
                 pass
 
             def get_payment_status(self, provider_payment_id):
@@ -200,7 +200,7 @@ class TestProviderRegistry:
             def create_refund(self, payment, amount=None, reason="", **kwargs):
                 pass
 
-            def handle_webhook(self, payload, signature=None, **kwargs):
+            def _process_webhook(self, payload, signature=None, **kwargs):
                 pass
 
             def get_payment_status(self, provider_payment_id):
@@ -228,7 +228,7 @@ class TestProviderRegistry:
             def create_refund(self, payment, amount=None, reason="", **kwargs):
                 return RefundResult(success=True)
 
-            def handle_webhook(self, payload, signature=None, **kwargs):
+            def _process_webhook(self, payload, signature=None, **kwargs):
                 return WebhookResult(success=True)
 
             def get_payment_status(self, provider_payment_id):
@@ -254,7 +254,7 @@ class TestProviderRegistry:
             def create_refund(self, payment, amount=None, reason="", **kwargs):
                 pass
 
-            def handle_webhook(self, payload, signature=None, **kwargs):
+            def _process_webhook(self, payload, signature=None, **kwargs):
                 pass
 
             def get_payment_status(self, provider_payment_id):
@@ -275,3 +275,70 @@ class TestProviderRegistry:
         """Test unregistering non-existent provider doesn't raise error."""
         # Should not raise
         registry.unregister("nonexistent")
+
+
+class TestWebhookAuthTemplate:
+    """
+    Tests for the base PaymentProvider.handle_webhook template-method auth check.
+
+    These guarantee that subclasses cannot accidentally bypass signature
+    verification: handle_webhook is concrete on the base, runs the auth gate,
+    and only then delegates to the subclass-implemented _process_webhook.
+    """
+
+    def _build_provider(self, alt_auth: bool = False) -> PaymentProvider:
+        class _Provider(PaymentProvider):
+            provider_name = "test"
+
+            def create_payment(self, payment, **kwargs):
+                return PaymentResult(success=True)
+
+            def confirm_payment(self, provider_payment_id):
+                return PaymentResult(success=True)
+
+            def create_refund(self, payment, amount=None, reason="", **kwargs):
+                return RefundResult(success=True)
+
+            def _process_webhook(self, payload, signature=None, **kwargs):
+                return WebhookResult(success=True, event_type="test.event")
+
+            def get_payment_status(self, provider_payment_id):
+                return "succeeded"
+
+            def _supports_alternative_webhook_auth(self) -> bool:
+                return alt_auth
+
+        return _Provider()
+
+    def test_raises_when_signature_none_and_no_alt_auth(self):
+        provider = self._build_provider(alt_auth=False)
+        with pytest.raises(ValueError, match="signature verification is required"):
+            provider.handle_webhook(b"payload", signature=None)
+
+    def test_raises_when_signature_omitted(self):
+        provider = self._build_provider(alt_auth=False)
+        with pytest.raises(ValueError, match="signature verification is required"):
+            provider.handle_webhook(b"payload")
+
+    def test_passes_through_when_signature_provided(self):
+        provider = self._build_provider(alt_auth=False)
+        result = provider.handle_webhook(b"payload", signature="sig_abc")
+        assert result.success is True
+        assert result.event_type == "test.event"
+
+    def test_skips_check_when_alt_auth_true(self):
+        provider = self._build_provider(alt_auth=True)
+        # signature=None must be accepted now
+        result = provider.handle_webhook(b"payload", signature=None)
+        assert result.success is True
+
+    def test_alt_auth_default_is_false(self):
+        provider = self._build_provider(alt_auth=False)
+        assert provider._supports_alternative_webhook_auth() is False
+
+    def test_error_message_names_provider_class(self):
+        provider = self._build_provider(alt_auth=False)
+        with pytest.raises(ValueError) as exc_info:
+            provider.handle_webhook(b"payload")
+        # Must mention class name so operators can find the offender in logs
+        assert "_Provider" in str(exc_info.value)

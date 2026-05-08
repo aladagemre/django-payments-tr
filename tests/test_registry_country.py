@@ -32,7 +32,7 @@ class MockStripeProvider(PaymentProvider):
     def create_refund(self, payment, amount=None, reason="", **kwargs):
         return RefundResult(success=True)
 
-    def handle_webhook(self, payload, signature=None, **kwargs):
+    def _process_webhook(self, payload, signature=None, **kwargs):
         return WebhookResult(success=True)
 
     def get_payment_status(self, provider_payment_id):
@@ -53,8 +53,11 @@ class MockIyzicoProvider(PaymentProvider):
     def create_refund(self, payment, amount=None, reason="", **kwargs):
         return RefundResult(success=True)
 
-    def handle_webhook(self, payload, signature=None, **kwargs):
+    def _process_webhook(self, payload, signature=None, **kwargs):
         return WebhookResult(success=True)
+
+    def _supports_alternative_webhook_auth(self) -> bool:
+        return True
 
     def get_payment_status(self, provider_payment_id):
         return "succeeded"

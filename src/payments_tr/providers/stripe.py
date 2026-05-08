@@ -255,29 +255,26 @@ class StripeProvider(PaymentProvider):
                 error_message=str(e),
             )
 
-    def handle_webhook(
+    def _process_webhook(
         self,
         payload: bytes,
         signature: str | None = None,
         **kwargs: Any,
     ) -> WebhookResult:
         """
-        Handle a Stripe webhook event.
+        Process a Stripe webhook event.
+
+        Signature presence is enforced by the base ``handle_webhook``
+        template method; this only runs after auth has passed.
 
         Args:
             payload: Raw webhook payload (bytes)
-            signature: Stripe-Signature header value
+            signature: Stripe-Signature header value (guaranteed non-None)
             **kwargs: Additional data
 
         Returns:
             WebhookResult with event details
         """
-        if not signature:
-            return WebhookResult(
-                success=False,
-                error_message="Missing Stripe signature",
-            )
-
         try:
             event = self._stripe.Webhook.construct_event(
                 payload,

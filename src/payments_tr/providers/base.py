@@ -326,7 +326,6 @@ class PaymentProvider(ABC):
         """
         pass
 
-    @abstractmethod
     def handle_webhook(
         self,
         payload: bytes,
@@ -336,21 +335,80 @@ class PaymentProvider(ABC):
         """
         Handle a webhook/callback from the provider.
 
-        This processes incoming notifications from the payment provider
-        about payment status changes.
+        This is a template method that enforces authentication before
+        delegating to the provider-specific :meth:`_process_webhook`.
+        Providers MUST NOT override this method directly; override
+        ``_process_webhook`` instead.
+
+        Authentication strategies:
+        - HMAC signature verification (Stripe, generic webhooks): a non-None
+          ``signature`` is required.
+        - Server-side token retrieval (Iyzico): override
+          :meth:`_supports_alternative_webhook_auth` to return ``True`` so
+          this method permits ``signature=None``.
 
         Args:
             payload: Raw webhook payload (bytes)
-            signature: Webhook signature for verification
+            signature: Webhook signature for verification. ``None`` is
+                       accepted only for providers using alternative auth.
             **kwargs: Additional data (e.g., headers, query params)
 
         Returns:
             WebhookResult with event processing status
 
+        Raises:
+            ValueError: If signature is None and the provider does not opt
+                        into alternative authentication.
+
         Example:
             >>> result = provider.handle_webhook(request.body, request.headers.get("signature"))
         """
-        pass
+        if signature is None and not self._supports_alternative_webhook_auth():
+            raise ValueError(
+                "Webhook signature verification is required for "
+                f"{self.__class__.__name__}. Provide a valid signature, "
+                "or override _supports_alternative_webhook_auth() to opt "
+                "into a different authentication strategy."
+            )
+        return self._process_webhook(payload, signature=signature, **kwargs)
+
+    @abstractmethod
+    def _process_webhook(
+        self,
+        payload: bytes,
+        signature: str | None = None,
+        **kwargs: Any,
+    ) -> WebhookResult:
+        """
+        Provider-specific webhook processing.
+
+        Called by :meth:`handle_webhook` after the base authentication
+        check has passed. Subclasses implement payload parsing, provider
+        API calls, and result construction here.
+
+        Args:
+            payload: Raw webhook payload (bytes), or for providers like
+                     Iyzico, parsed callback data.
+            signature: Verified signature (or None for alternative-auth
+                       providers).
+            **kwargs: Provider-specific extras.
+
+        Returns:
+            WebhookResult describing the processed event.
+        """
+        ...
+
+    def _supports_alternative_webhook_auth(self) -> bool:
+        """
+        Whether this provider uses an alternative webhook authentication strategy.
+
+        Override and return True for providers that verify webhooks via
+        server-side token retrieval (e.g., Iyzico) instead of HMAC signatures.
+
+        Returns:
+            False by default; providers with token-based auth should override.
+        """
+        return False
 
     @abstractmethod
     def get_payment_status(self, provider_payment_id: str) -> str:

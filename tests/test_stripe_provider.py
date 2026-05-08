@@ -282,11 +282,18 @@ class TestStripeProvider:
         assert result.payment_id == 456
 
     def test_handle_webhook_missing_signature(self, stripe_provider):
-        """Test webhook fails without signature."""
-        result = stripe_provider.handle_webhook(b"payload")
+        """Stripe rejects unsigned webhooks via the base auth check."""
+        with pytest.raises(ValueError, match="signature verification is required"):
+            stripe_provider.handle_webhook(b"payload")
 
-        assert result.success is False
-        assert "Missing Stripe signature" in result.error_message
+    def test_handle_webhook_explicit_none_signature(self, stripe_provider):
+        """Passing signature=None still raises (no silent fallback)."""
+        with pytest.raises(ValueError, match="signature verification is required"):
+            stripe_provider.handle_webhook(b"payload", signature=None)
+
+    def test_supports_alternative_webhook_auth_false(self, stripe_provider):
+        """Stripe must declare it does NOT use alternative auth."""
+        assert stripe_provider._supports_alternative_webhook_auth() is False
 
     def test_handle_webhook_invalid_signature(self, stripe_provider, mock_stripe):
         """Test webhook handles signature verification error."""
