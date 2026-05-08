@@ -40,6 +40,8 @@ __all__ = [
     "IyzicoPaymentQuerySet",
     "IyzicoPaymentManager",
     "AbstractIyzicoPayment",
+    # marketplace
+    "AbstractSubMerchantOwner",
 ]
 
 # Backward compatibility alias
@@ -566,3 +568,157 @@ class AbstractIyzicoPayment(AbstractPayment):
         from .currency import get_currency_info
 
         return get_currency_info(self.currency)
+
+
+class AbstractSubMerchantOwner(models.Model):
+    """
+    Abstract mixin for models that own an Iyzico sub-merchant identity.
+
+    Attach this to your seller / vendor / station / therapist model when you
+    want to register that record as an Iyzico marketplace sub-merchant. The
+    mixin provides the storage fields and a ``clean()`` hook that runs the
+    Turkish validators when values are present — call ``full_clean()`` (or
+    override ``save()``) to enforce them.
+
+    No automatic migration is shipped. Consumers add this to their own model
+    and run ``makemigrations`` themselves; this keeps the schema fully under
+    the consumer's control and avoids forcing fields on apps that do not
+    use marketplace.
+
+    Example:
+        class PrintStation(AbstractSubMerchantOwner):
+            owner = models.ForeignKey(User, on_delete=models.CASCADE)
+            name = models.CharField(max_length=200)
+
+            class Meta:
+                db_table = "print_stations"
+    """
+
+    SUB_MERCHANT_TYPE_CHOICES = (
+        ("PERSONAL", _("Personal")),
+        ("PRIVATE_COMPANY", _("Private Company")),
+        ("LIMITED_OR_JOINT_STOCK_COMPANY", _("Limited or Joint Stock Company")),
+    )
+
+    iyzico_sub_merchant_key = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        verbose_name=_("Iyzico Sub-Merchant Key"),
+        help_text=_(
+            "Iyzico-issued key returned from SubMerchantClient.create(); "
+            "used as basketItems[i].subMerchantKey on marketplace payments."
+        ),
+    )
+    iyzico_sub_merchant_type = models.CharField(
+        max_length=40,
+        choices=SUB_MERCHANT_TYPE_CHOICES,
+        blank=True,
+        verbose_name=_("Iyzico Sub-Merchant Type"),
+        help_text=_("Iyzico legal type for this seller."),
+    )
+    iyzico_external_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name=_("Iyzico External ID"),
+        help_text=_(
+            "Caller-side stable ID passed to SubMerchantClient.create(); "
+            "use this with retrieve() to look up the seller again."
+        ),
+    )
+    iyzico_iban = models.CharField(
+        max_length=34,
+        blank=True,
+        verbose_name=_("Iyzico IBAN"),
+        help_text=_("Settlement IBAN for the seller (Turkish format, 26 chars)."),
+    )
+    iyzico_identity_number = models.CharField(
+        max_length=11,
+        blank=True,
+        verbose_name=_("Iyzico Identity Number (TCKN)"),
+        help_text=_("Required for PERSONAL sub-merchants. 11-digit TCKN."),
+    )
+    iyzico_tax_office = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Iyzico Tax Office"),
+        help_text=_("Required for company sub-merchants."),
+    )
+    iyzico_tax_number = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name=_("Iyzico Tax Number (VKN)"),
+        help_text=_("Required for company sub-merchants. 10-digit VKN."),
+    )
+    iyzico_legal_company_title = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Iyzico Legal Company Title"),
+        help_text=_("Legal company title as registered with Iyzico."),
+    )
+
+    class Meta:
+        abstract = True
+
+    def clean(self) -> None:
+        """
+        Validate Turkish-format fields when they are non-empty.
+
+        Lazily imports validators so the mixin remains usable in apps that
+        only need the storage fields (e.g. for read-only admin display).
+        """
+        from payments_tr.validation.turkish import (
+            ValidationError as _TurkishValidationError,
+        )
+        from payments_tr.validation.turkish import (
+            validate_iban_tr,
+            validate_tckn,
+            validate_vkn,
+        )
+
+        super().clean()
+
+        errors: dict[str, str] = {}
+
+        if self.iyzico_iban:
+            try:
+                validate_iban_tr(self.iyzico_iban, raise_exception=True)
+            except _TurkishValidationError as e:
+                errors["iyzico_iban"] = str(e)
+
+        if self.iyzico_identity_number:
+            try:
+                validate_tckn(self.iyzico_identity_number, raise_exception=True)
+            except _TurkishValidationError as e:
+                errors["iyzico_identity_number"] = str(e)
+
+        if self.iyzico_tax_number:
+            try:
+                validate_vkn(self.iyzico_tax_number, raise_exception=True)
+            except _TurkishValidationError as e:
+                errors["iyzico_tax_number"] = str(e)
+
+        if self.iyzico_sub_merchant_type == "PERSONAL" and not self.iyzico_identity_number:
+            errors["iyzico_identity_number"] = (
+                "PERSONAL sub-merchants require iyzico_identity_number (TCKN)"
+            )
+        elif self.iyzico_sub_merchant_type in (
+            "PRIVATE_COMPANY",
+            "LIMITED_OR_JOINT_STOCK_COMPANY",
+        ):
+            if not self.iyzico_tax_office:
+                errors["iyzico_tax_office"] = (
+                    f"{self.iyzico_sub_merchant_type} sub-merchants require iyzico_tax_office"
+                )
+            if not self.iyzico_tax_number:
+                errors["iyzico_tax_number"] = (
+                    f"{self.iyzico_sub_merchant_type} sub-merchants require iyzico_tax_number (VKN)"
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def has_iyzico_sub_merchant(self) -> bool:
+        """Whether this owner has been registered with Iyzico."""
+        return bool(self.iyzico_sub_merchant_key)
