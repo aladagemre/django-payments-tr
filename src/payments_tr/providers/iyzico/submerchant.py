@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import iyzipay
@@ -43,7 +43,7 @@ from .utils import parse_iyzico_response, sanitize_log_data
 logger = logging.getLogger(__name__)
 
 
-class SubMerchantType(str, Enum):
+class SubMerchantType(StrEnum):
     """
     Iyzico sub-merchant legal types.
 
