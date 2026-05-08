@@ -332,7 +332,7 @@ wheels = [
 
 [[package]]
 name = "django-payments-tr"
-version = "0.3.2"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "django" },
@@ -378,7 +378,7 @@ dev = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0" },
     { name = "celery", marker = "extra == 'dev'", specifier = ">=5.6.0" },
-    { name = "django", specifier = ">=4.2" },
+    { name = "django", specifier = ">=4.2.30,!=5.0.*,!=5.1.*,<7.0" },
     { name = "django-stubs", marker = "extra == 'dev'", specifier = ">=4.2" },
     { name = "djangorestframework", marker = "extra == 'dev'", specifier = ">=3.14" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.0" },

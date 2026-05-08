@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-payments-tr"
-version = "0.3.2"
+version = "0.4.0"
 description = "Payment processing for Django with Turkey-specific features (iyzico, Stripe, EFT, KDV)"
 readme = "README.md"
 license = "MIT"
@@ -22,12 +22,14 @@ keywords = [
     "vat",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -39,7 +41,11 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "django>=4.2",
+    # Tightened in v0.4.0 to skip vulnerable Django versions surfaced by
+    # pip-audit (CVE-2025-13473, CVE-2026-1207, CVE-2026-25674, ...).
+    # The marker is conservative — patch releases remain freely available
+    # within each supported series.
+    "django>=4.2.30,!=5.0.*,!=5.1.*,<7.0",
 ]
 
 [project.optional-dependencies]
