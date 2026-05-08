@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-08
+
+This release adds Iyzico marketplace ("işyeri gelir paylaşımı") support so
+downstream apps no longer have to drop down to the bare `iyzipay` SDK to get
+per-basket-item revenue splitting. The change is **fully additive** —
+existing v0.4.0 callers see no behaviour change unless they opt in via the
+new `marketplace=True` flag, the new `payment_transaction_id` refund kwarg,
+or the new `SubMerchantClient` / `AbstractSubMerchantOwner` symbols.
+
+### Added
+
+- **Marketplace basket validation in `IyzicoClient.create_checkout_form`.**
+  When any basket item carries `subMerchantKey` / `subMerchantPrice`, the
+  client now enforces:
+  - the two fields are required *together* on each marketplace item
+    (`MARKETPLACE_FIELDS_INCOMPLETE`);
+  - empty/whitespace `subMerchantKey` is rejected
+    (`MARKETPLACE_EMPTY_SUBMERCHANT_KEY`) — the bare SDK silently no-ops;
+  - per-item: `subMerchantPrice <= price`
+    (`MARKETPLACE_SUBMERCHANT_EXCEEDS_ITEM_PRICE`);
+  - cross-item: `sum(subMerchantPrice) <= paidPrice`
+    (`MARKETPLACE_SUBMERCHANT_SUM_EXCEEDS_PAID_PRICE`).
+
+  All comparisons run through `Decimal`, so float drift cannot let bad
+  splits through. The validator is exposed publicly as
+  `payments_tr.providers.iyzico.client.validate_marketplace_basket` for
+  callers that want to pre-check baskets before posting.
+- **`IyzicoProvider.create_payment(marketplace=True)`.** Strict mode that
+  requires every basket item to be sub-merchant routed and rejects the
+  default synthetic single-item basket fallback (which would otherwise
+  route 100% of revenue to the platform). `marketplace=False` (the
+  default) keeps v0.4.0 behaviour byte-for-byte.
+- **`IyzicoProvider.supports_marketplace() -> True`.**
+- **New module `payments_tr.providers.iyzico.submerchant`** wrapping the
+  Iyzico sub-merchant lifecycle endpoints:
+  - `SubMerchantClient.create(...)` — registers a seller, validates IBAN
+    via `validate_iban_tr`, TCKN via `validate_tckn` (PERSONAL types),
+    VKN via `validate_vkn` (company types). Returns a frozen
+    `SubMerchantResponse` dataclass. Type-conditional required fields
+    are enforced before the API call.
+  - `SubMerchantClient.update(...)` — sends only the fields the caller
+    supplies (PATCH semantics), rejects unknown kwargs with a clear
+    error code rather than silently dropping them.
+  - `SubMerchantClient.retrieve(external_id)` — looks up by the
+    caller-side external id (matches the official SDK behaviour).
+  - `SubMerchantType` `str`-Enum: `PERSONAL`, `PRIVATE_COMPANY`,
+    `LIMITED_OR_JOINT_STOCK_COMPANY`.
+  - Transport failures wrap into `PaymentError`; application-level
+    failures stay in-band on the response (`is_successful=False`).
+- **`AbstractSubMerchantOwner` model mixin** in
+  `payments_tr.providers.iyzico.models`. Storage fields for sub-merchant
+  key, type, external id, IBAN, TCKN, tax office, VKN, legal company
+  title — all optional. `clean()` runs the TR validators when fields are
+  non-empty and enforces the same type-conditional required-field rules
+  as `SubMerchantClient.create`. **No automatic migration is shipped**;
+  consumers add the mixin to their seller model and run
+  `makemigrations` themselves.
+- **Item-level refund attribution.**
+  - `RefundResponse.payment_transaction_id` property exposing the basket
+    item id that a marketplace refund applied to.
+  - `IyzicoClient.refund_payment(payment_transaction_id=...)` and
+    `IyzicoProvider.create_refund(payment_transaction_id=...)` accept an
+    item-level transaction id and prefer it over the order-level
+    `payment_id` when present. Falls back to `payment_id` for
+    non-marketplace refunds (no behaviour change for v0.4.0 callers).
+
+### Documentation
+
+- New top-level `docs/marketplace.md` with the end-to-end flow:
+  register sub-merchant → store key on seller model → create payment →
+  handle callback → refund.
+- New `Marketplace (sub-merchant) payments` section in `README.md` with
+  a multi-file-single-seller example.
+
+### Compatibility
+
+- No public symbol from v0.4.0 was removed or renamed. The new
+  `marketplace` parameter on `IyzicoClient.create_checkout_form` and
+  `IyzicoProvider.create_payment` defaults to `False`. The new
+  `payment_transaction_id` parameters default to `None` — non-marketplace
+  refunds emit identical request bytes to v0.4.0.
+- TRY-only marketplace currency support in v0.5.0 (Iyzico marketplace is
+  TR-only in practice).
+
 ## [0.4.0] - 2026-05-08
 
 This release is a security-hardening pass driven by an external SAST scan
