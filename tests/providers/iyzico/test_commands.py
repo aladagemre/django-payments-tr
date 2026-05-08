@@ -216,6 +216,7 @@ class TestCleanupOldPaymentsCommand:
             "cleanup_old_payments",
             model=f"tests.providers.iyzico.models.{payment_model.__name__}",
             days=365,
+            keep_successful=1825,
             no_input=True,
             stdout=out,
         )
@@ -242,6 +243,7 @@ class TestCleanupOldPaymentsCommand:
             "cleanup_old_payments",
             model=f"tests.providers.iyzico.models.{payment_model.__name__}",
             days=365,
+            keep_successful=1825,
             dry_run=True,
             stdout=out,
         )
@@ -279,6 +281,7 @@ class TestCleanupOldPaymentsCommand:
             "cleanup_old_payments",
             model=f"tests.providers.iyzico.models.{payment_model.__name__}",
             days=365,
+            keep_successful=1825,
             no_input=True,
             stdout=out,
         )
@@ -360,6 +363,7 @@ class TestCleanupOldPaymentsCommand:
             "cleanup_old_payments",
             model=f"tests.providers.iyzico.models.{payment_model.__name__}",
             days=365,
+            keep_successful=1825,
             keep_refunded=True,
             no_input=True,
             stdout=out,
@@ -391,6 +395,7 @@ class TestCleanupOldPaymentsCommand:
             "cleanup_old_payments",
             model=f"tests.providers.iyzico.models.{payment_model.__name__}",
             days=365,
+            keep_successful=1825,
             export=str(export_file),
             no_input=True,
             stdout=out,
@@ -425,6 +430,7 @@ class TestCleanupOldPaymentsCommand:
                 "cleanup_old_payments",
                 model=f"tests.providers.iyzico.models.{payment_model.__name__}",
                 days=365,
+            keep_successful=1825,
                 stdout=out,
             )
 
@@ -443,5 +449,47 @@ class TestCleanupOldPaymentsCommand:
                 "cleanup_old_payments",
                 model="invalid.Model",
                 days=365,
+            keep_successful=1825,
                 no_input=True,
             )
+
+
+@pytest.mark.django_db
+class TestCleanupRetentionGuard:
+    """v0.4.0: cleanup_old_payments refuses unsafe defaults."""
+
+    def test_missing_keep_successful_raises(self, payment_model):
+        from django.core.management.base import CommandError
+
+        with pytest.raises(CommandError, match="--keep-successful is required"):
+            call_command(
+                "cleanup_old_payments",
+                model=f"tests.providers.iyzico.models.{payment_model.__name__}",
+                days=365,
+                no_input=True,
+            )
+
+    def test_short_keep_successful_warns(self, payment_model):
+        out = io.StringIO()
+        call_command(
+            "cleanup_old_payments",
+            model=f"tests.providers.iyzico.models.{payment_model.__name__}",
+            days=365,
+            keep_successful=730,  # below the 1825-day floor
+            no_input=True,
+            stdout=out,
+        )
+        # Warning is printed via self.style.WARNING
+        assert "below the typical financial retention floor" in out.getvalue()
+
+    def test_safe_keep_successful_no_warning(self, payment_model):
+        out = io.StringIO()
+        call_command(
+            "cleanup_old_payments",
+            model=f"tests.providers.iyzico.models.{payment_model.__name__}",
+            days=365,
+            keep_successful=1825,
+            no_input=True,
+            stdout=out,
+        )
+        assert "below the typical financial retention floor" not in out.getvalue()

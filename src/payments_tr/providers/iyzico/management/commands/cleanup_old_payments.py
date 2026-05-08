@@ -41,8 +41,15 @@ class Command(BaseCommand):
         parser.add_argument(
             "--keep-successful",
             type=int,
-            default=730,
-            help="Keep successful payments for this many days (default: 730 = 2 years)",
+            default=None,
+            help=(
+                "Keep successful payments for this many days. "
+                "REQUIRED — there is no safe default because financial "
+                "retention obligations vary by jurisdiction. "
+                "Turkish VUK requires 5 years (1825). EU member states "
+                "typically require 7-10 years (2555-3650). Set to a "
+                "value at or above your local statutory retention period."
+            ),
         )
         parser.add_argument(
             "--dry-run",
@@ -80,6 +87,26 @@ class Command(BaseCommand):
         model_path = options["model"]
         export_path = options["export"]
         keep_refunded = options["keep_refunded"]
+
+        if keep_successful is None:
+            raise CommandError(
+                "--keep-successful is required. There is no safe default "
+                "because financial retention obligations vary by "
+                "jurisdiction (TR VUK: 5y / 1825 days; many EU states: "
+                "7-10y / 2555-3650 days). Pick a value at or above your "
+                "local statutory minimum and pass it explicitly. "
+                "Earlier versions defaulted to 730 days (2y) which "
+                "violated common bookkeeping requirements."
+            )
+        if keep_successful < 1825:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"WARNING: --keep-successful={keep_successful} is "
+                    f"below the typical financial retention floor "
+                    f"(1825 days / 5 years). Confirm this matches your "
+                    f"jurisdiction's bookkeeping rules before proceeding."
+                )
+            )
 
         # Set logging level based on verbosity
         if options["verbosity"] >= 2:
