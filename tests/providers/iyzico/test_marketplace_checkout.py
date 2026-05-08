@@ -385,7 +385,7 @@ class _FakePayment:
     """Minimal PaymentLike for provider tests."""
 
     def __init__(self, pid: str = "pay-1", amount: int = 9000):
-        self.id = pid
+        self.id: int | str = pid
         self.amount = amount  # kuruş
         self.currency = "TRY"
 

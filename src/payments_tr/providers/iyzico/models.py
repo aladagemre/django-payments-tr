@@ -681,21 +681,24 @@ class AbstractSubMerchantOwner(models.Model):
 
         errors: dict[str, str] = {}
 
+        # str() coercions below are no-ops at runtime (the descriptors yield
+        # str values on instances) but satisfy strict type checkers that see
+        # the class-level CharField descriptor type.
         if self.iyzico_iban:
             try:
-                validate_iban_tr(self.iyzico_iban, raise_exception=True)
+                validate_iban_tr(str(self.iyzico_iban), raise_exception=True)
             except _TurkishValidationError as e:
                 errors["iyzico_iban"] = str(e)
 
         if self.iyzico_identity_number:
             try:
-                validate_tckn(self.iyzico_identity_number, raise_exception=True)
+                validate_tckn(str(self.iyzico_identity_number), raise_exception=True)
             except _TurkishValidationError as e:
                 errors["iyzico_identity_number"] = str(e)
 
         if self.iyzico_tax_number:
             try:
-                validate_vkn(self.iyzico_tax_number, raise_exception=True)
+                validate_vkn(str(self.iyzico_tax_number), raise_exception=True)
             except _TurkishValidationError as e:
                 errors["iyzico_tax_number"] = str(e)
 

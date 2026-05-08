@@ -36,7 +36,7 @@ def mock_refund_class():
 
 class _FakePayment:
     def __init__(self, pid: str = "order-pay-1", amount: int = 9000):
-        self.id = pid
+        self.id: int | str = pid
         self.amount = amount
         self.currency = "TRY"
         self.iyzico_payment_id = pid

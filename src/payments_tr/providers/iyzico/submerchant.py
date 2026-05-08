@@ -201,9 +201,11 @@ class SubMerchantClient:
 
     def get_options(self) -> dict[str, str]:
         """Return cached Iyzico API options (api_key/secret_key/base_url)."""
-        if self._options is None:
-            self._options = self.settings.get_options()
-        return self._options
+        options = self._options
+        if options is None:
+            options = self.settings.get_options()
+            self._options = options
+        return options
 
     # ------------------------------------------------------------------
     # create
@@ -266,8 +268,8 @@ class SubMerchantClient:
                 "external_id is required for sub-merchant create",
                 error_code="SUBMERCHANT_MISSING_EXTERNAL_ID",
             )
-        if not isinstance(sub_merchant_type, SubMerchantType):
-            raise ValidationError(
+        if not isinstance(sub_merchant_type, SubMerchantType):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValidationError(  # pyright: ignore[reportUnreachable]
                 "sub_merchant_type must be a SubMerchantType enum value",
                 error_code="SUBMERCHANT_INVALID_TYPE",
             )

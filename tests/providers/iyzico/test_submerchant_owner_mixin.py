@@ -20,7 +20,7 @@ class _Seller(AbstractSubMerchantOwner):
 
     name = models.CharField(max_length=100)
 
-    class Meta:
+    class Meta(AbstractSubMerchantOwner.Meta):
         abstract = True
         app_label = "tests"
 
@@ -47,7 +47,7 @@ def _make(**fields):
         "iyzico_legal_company_title",
     ):
         setattr(seller, f, "")
-    seller.name = "Acme"
+    seller.name = "Acme"  # type: ignore[assignment]  # CharField descriptor at class level, str at instance
     for k, v in fields.items():
         setattr(seller, k, v)
     return seller
