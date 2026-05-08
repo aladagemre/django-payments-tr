@@ -89,6 +89,11 @@ class IyzicoProvider(PaymentProvider):
                 - installments: List of installment options (e.g., [1, 2, 3, 6])
                 - basket_items: Custom basket items list
                 - locale: Locale for checkout (default: "tr")
+                - marketplace: When ``True``, enable strict marketplace
+                  routing — every basket item must carry both
+                  ``subMerchantKey`` and ``subMerchantPrice``, and the
+                  default synthetic single-item basket is rejected. The
+                  default ``False`` keeps v0.4.0 behaviour byte-for-byte.
 
         Returns:
             PaymentResult with token and checkout_url
@@ -100,6 +105,8 @@ class IyzicoProvider(PaymentProvider):
                 error_code="MISSING_CALLBACK_URL",
             )
 
+        marketplace = bool(kwargs.get("marketplace", False))
+
         # Convert buyer_info to BuyerInfo if dict
         if isinstance(buyer_info, dict):
             buyer_info = BuyerInfo.from_dict(buyer_info)
@@ -108,7 +115,9 @@ class IyzicoProvider(PaymentProvider):
             buyer_info = self._extract_buyer_info(payment)
 
         try:
-            # Build request data
+            # Build request data — _build_checkout_request reads
+            # ``marketplace`` to decide whether the synthetic single-item
+            # basket fallback is allowed.
             order_data, buyer_dict, billing_address, basket_items = self._build_checkout_request(
                 payment=payment,
                 currency=currency,
@@ -126,6 +135,7 @@ class IyzicoProvider(PaymentProvider):
                 basket_items=basket_items,
                 callback_url=callback_url,
                 enabled_installments=installments,
+                marketplace=marketplace,
             )
 
             # If we get here, the response was successful
@@ -311,6 +321,13 @@ class IyzicoProvider(PaymentProvider):
             **kwargs: Additional options:
                 - provider_payment_id: Override payment ID from payment object
                 - ip_address: IP address for refund request (required by iyzico)
+                - payment_transaction_id: Item-level transaction ID. When
+                  set, the refund is targeted at a specific basket item's
+                  sub-merchant share instead of the order-level payment id.
+                  Required for marketplace refunds; for non-marketplace
+                  flows this is ``None`` and we fall back to
+                  ``provider_payment_id`` (same byte-for-byte v0.4.0
+                  behaviour).
 
         Returns:
             RefundResult with refund status
@@ -331,6 +348,7 @@ class IyzicoProvider(PaymentProvider):
 
         # Get IP address for refund (required by iyzico)
         ip_address = kwargs.get("ip_address", "127.0.0.1")
+        payment_transaction_id = kwargs.get("payment_transaction_id")
 
         # Convert amount to Decimal for iyzico
         refund_amount = None
@@ -343,6 +361,7 @@ class IyzicoProvider(PaymentProvider):
                 ip_address=ip_address,
                 amount=refund_amount,
                 reason=reason or None,
+                payment_transaction_id=payment_transaction_id,
             )
 
             # If we get here, the refund was successful
@@ -455,6 +474,16 @@ class IyzicoProvider(PaymentProvider):
         """iyzico supports installment payments."""
         return True
 
+    def supports_marketplace(self) -> bool:
+        """
+        iyzico supports marketplace (sub-merchant) payment splitting.
+
+        Callers can opt in by passing ``marketplace=True`` to
+        :meth:`create_payment` together with ``basket_items`` that carry
+        ``subMerchantKey`` and ``subMerchantPrice``.
+        """
+        return True
+
     def _build_checkout_request(
         self,
         payment: PaymentLike,
@@ -465,8 +494,21 @@ class IyzicoProvider(PaymentProvider):
         """Build the checkout form request data components."""
         locale = kwargs.get("locale", "tr")
         basket_items = kwargs.get("basket_items")
+        marketplace = bool(kwargs.get("marketplace", False))
 
         if not basket_items:
+            if marketplace:
+                # Don't synthesise a default basket in marketplace mode —
+                # there is no plausible default ``subMerchantKey`` we
+                # could put on it. The client layer will catch this too
+                # (defence in depth), but failing here gives a clearer
+                # provider-level error.
+                from .exceptions import ValidationError as IyzicoValidationError
+
+                raise IyzicoValidationError(
+                    "marketplace=True requires explicit basket_items with sub-merchant fields",
+                    error_code="MARKETPLACE_REQUIRES_BASKET_ITEMS",
+                )
             basket_items = self._build_default_basket(payment)
 
         buyer_dict = buyer_info.to_dict()

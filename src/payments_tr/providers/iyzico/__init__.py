@@ -52,8 +52,14 @@ _IYZIPAY_AVAILABLE = importlib.util.find_spec("iyzipay") is not None
 # Type hints for lazy imports
 if TYPE_CHECKING:
     from .client import IyzicoClient
-    from .models import AbstractIyzicoPayment, IyzicoPaymentManager, IyzicoPaymentQuerySet
+    from .models import (
+        AbstractIyzicoPayment,
+        AbstractSubMerchantOwner,
+        IyzicoPaymentManager,
+        IyzicoPaymentQuerySet,
+    )
     from .provider import IyzicoProvider
+    from .submerchant import SubMerchantClient, SubMerchantResponse, SubMerchantType
 
 __all__ = [
     # Exceptions (available immediately)
@@ -72,8 +78,13 @@ __all__ = [
     "IyzicoClient",
     # Models (lazy loaded)
     "AbstractIyzicoPayment",
+    "AbstractSubMerchantOwner",
     "IyzicoPaymentManager",
     "IyzicoPaymentQuerySet",
+    # Marketplace / sub-merchant (lazy loaded)
+    "SubMerchantClient",
+    "SubMerchantResponse",
+    "SubMerchantType",
     # Functions
     "get_client",
     "get_provider",
@@ -132,6 +143,10 @@ def __getattr__(name: str):
         from .models import AbstractIyzicoPayment
 
         return AbstractIyzicoPayment
+    if name == "AbstractSubMerchantOwner":
+        from .models import AbstractSubMerchantOwner
+
+        return AbstractSubMerchantOwner
     if name == "IyzicoPaymentManager":
         from .models import IyzicoPaymentManager
 
@@ -140,4 +155,16 @@ def __getattr__(name: str):
         from .models import IyzicoPaymentQuerySet
 
         return IyzicoPaymentQuerySet
+    if name == "SubMerchantClient":
+        from .submerchant import SubMerchantClient
+
+        return SubMerchantClient
+    if name == "SubMerchantResponse":
+        from .submerchant import SubMerchantResponse
+
+        return SubMerchantResponse
+    if name == "SubMerchantType":
+        from .submerchant import SubMerchantType
+
+        return SubMerchantType
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
