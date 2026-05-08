@@ -281,21 +281,50 @@ class PaymentProvider(ABC):
         pass
 
     @abstractmethod
-    def confirm_payment(self, provider_payment_id: str) -> PaymentResult:
+    def confirm_payment(
+        self,
+        provider_payment_id: str,
+        *,
+        expected_amount: int | None = None,
+        expected_currency: str | None = None,
+    ) -> PaymentResult:
         """
-        Confirm/retrieve a payment status.
+        Confirm/retrieve a payment status, optionally validating it
+        against the order the application expects to be paid.
 
-        Use this to verify a payment was successful after callback or
-        to check the current status of a payment.
+        **TOCTOU defense.** Callers should pass ``expected_amount`` (in
+        the smallest currency unit, e.g. kuruş) and ``expected_currency``
+        for every confirmation. The provider implementation will reject
+        the result with ``error_code="AMOUNT_MISMATCH"`` /
+        ``"CURRENCY_MISMATCH"`` when the provider-reported values
+        deviate, defeating the classic "buy a 10 TL session, complete a
+        100 TL checkout" attack pattern.
+
+        Calling without the expected values leaves the caller on the
+        hook for amount validation; the provider will emit a warning to
+        encourage migration.
 
         Args:
-            provider_payment_id: The provider's payment/transaction ID or token
+            provider_payment_id: The provider's payment/transaction ID
+                or token.
+            expected_amount: Order amount the application expects, in
+                the smallest currency unit (kuruş for TRY, cents for
+                EUR/USD). When supplied, mismatch is fatal.
+            expected_currency: Currency code the application expects,
+                e.g. ``"TRY"``. When supplied, mismatch is fatal.
 
         Returns:
-            PaymentResult with confirmation status
+            PaymentResult with confirmation status. ``success=False``
+            with ``error_code in {"AMOUNT_MISMATCH","CURRENCY_MISMATCH"}``
+            when the provider-confirmed values disagree with the
+            expected values.
 
         Example:
-            >>> result = provider.confirm_payment("tok_abc123")
+            >>> result = provider.confirm_payment(
+            ...     "tok_abc123",
+            ...     expected_amount=order.amount_kurus,
+            ...     expected_currency="TRY",
+            ... )
             >>> if result.success and result.status == "succeeded":
             ...     mark_order_as_paid()
         """

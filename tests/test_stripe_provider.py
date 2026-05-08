@@ -8,10 +8,18 @@ import pytest
 class MockPaymentIntent:
     """Mock Stripe PaymentIntent."""
 
-    def __init__(self, id="pi_123", status="requires_payment_method"):
+    def __init__(
+        self,
+        id="pi_123",
+        status="requires_payment_method",
+        amount=10000,
+        currency="usd",
+    ):
         self.id = id
         self.status = status
         self.client_secret = "secret_123"
+        self.amount = amount
+        self.currency = currency
 
     def __iter__(self):
         return iter(
@@ -19,6 +27,8 @@ class MockPaymentIntent:
                 "id": self.id,
                 "status": self.status,
                 "client_secret": self.client_secret,
+                "amount": self.amount,
+                "currency": self.currency,
             }.items()
         )
 
@@ -334,3 +344,67 @@ class TestStripeProvider:
     def test_supports_subscriptions(self, stripe_provider):
         """Test supports_subscriptions returns True."""
         assert stripe_provider.supports_subscriptions() is True
+
+
+class TestStripeTOCTOU:
+    """v0.4.0 TOCTOU defense: confirm_payment validates amount + currency."""
+
+    def test_amount_match_passes(self, stripe_provider, mock_stripe):
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="succeeded", amount=10000, currency="usd"
+        )
+        result = stripe_provider.confirm_payment(
+            "pi_123", expected_amount=10000, expected_currency="USD"
+        )
+        assert result.success is True
+
+    def test_amount_mismatch_rejects(self, stripe_provider, mock_stripe):
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="succeeded", amount=10000, currency="usd"
+        )
+        result = stripe_provider.confirm_payment(
+            "pi_123", expected_amount=1000, expected_currency="USD"
+        )
+        assert result.success is False
+        assert result.error_code == "AMOUNT_MISMATCH"
+
+    def test_currency_mismatch_rejects(self, stripe_provider, mock_stripe):
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="succeeded", amount=10000, currency="usd"
+        )
+        result = stripe_provider.confirm_payment(
+            "pi_123", expected_amount=10000, expected_currency="EUR"
+        )
+        assert result.success is False
+        assert result.error_code == "CURRENCY_MISMATCH"
+
+    def test_no_expected_values_warns(self, stripe_provider, mock_stripe, caplog):
+        import logging
+
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="succeeded", amount=10000, currency="usd"
+        )
+        with caplog.at_level(logging.WARNING):
+            result = stripe_provider.confirm_payment("pi_123")
+        assert result.success is True
+        assert any("TOCTOU" in r.message for r in caplog.records)
+
+    def test_currency_compare_is_case_insensitive(self, stripe_provider, mock_stripe):
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="succeeded", amount=10000, currency="usd"
+        )
+        result = stripe_provider.confirm_payment(
+            "pi_123", expected_amount=10000, expected_currency="usd"
+        )
+        assert result.success is True
+
+    def test_processing_status_with_amount_match_succeeds(
+        self, stripe_provider, mock_stripe
+    ):
+        mock_stripe.PaymentIntent.retrieve.return_value = MockPaymentIntent(
+            status="processing", amount=10000, currency="usd"
+        )
+        result = stripe_provider.confirm_payment(
+            "pi_123", expected_amount=10000, expected_currency="USD"
+        )
+        assert result.success is True

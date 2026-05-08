@@ -112,12 +112,20 @@ class MockPaymentProvider(PaymentProvider):
             token=f"tok_mock_{payment.id}",
         )
 
-    def confirm_payment(self, provider_payment_id: str) -> PaymentResult:
+    def confirm_payment(
+        self,
+        provider_payment_id: str,
+        *,
+        expected_amount: int | None = None,
+        expected_currency: str | None = None,
+    ) -> PaymentResult:
         """Confirm a mock payment."""
         self.calls.append(
             {
                 "method": "confirm_payment",
                 "provider_payment_id": provider_payment_id,
+                "expected_amount": expected_amount,
+                "expected_currency": expected_currency,
             }
         )
 

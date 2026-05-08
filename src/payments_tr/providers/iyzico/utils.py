@@ -441,6 +441,59 @@ def format_price(amount: Any) -> str:
         return "0.00"
 
 
+def fingerprint_token(token: str | None, length: int = 12) -> str:
+    """
+    Return a non-reversible, collision-resistant fingerprint of a token.
+
+    Logs and traces should reference tokens by SHA-256 fingerprint, not
+    by prefix. Even six characters of a real iyzico token are correlatable
+    bearer-credential leakage if log files are retained or shipped to a
+    SIEM, and prefixes from the same token correlate across log lines
+    that may also carry conversation IDs / buyer emails — enabling
+    re-identification.
+
+    Args:
+        token: The token to fingerprint. ``None`` / empty returns a
+            sentinel rather than raising.
+        length: Hex characters of the SHA-256 digest to return. 12 is
+            collision-safe up to ~16M tokens.
+
+    Returns:
+        Hex string ``"sha256:<n hex chars>"``, or ``"<empty>"`` if the
+        token is missing.
+    """
+    if not token:
+        return "<empty>"
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:length]}"
+
+
+def kurus_to_try_string(amount_kurus: int) -> str:
+    """
+    Convert an integer kuruş amount to an Iyzico-API-formatted TRY string.
+
+    Money MUST go through Decimal — never float — because the result is
+    signed by Iyzico's HMAC. ``payment.amount / 100`` (float division)
+    can introduce binary-float drift that produces an off-by-one-cent
+    signature mismatch.
+
+    Args:
+        amount_kurus: Integer amount in kuruş (1/100 of TRY).
+
+    Returns:
+        Two-decimal TRY string suitable for Iyzico ``price``/``paidPrice``.
+
+    Example:
+        >>> kurus_to_try_string(2999)
+        '29.99'
+        >>> kurus_to_try_string(1)
+        '0.01'
+        >>> kurus_to_try_string(10000)
+        '100.00'
+    """
+    return format_price(Decimal(int(amount_kurus)) / Decimal(100))
+
+
 def generate_conversation_id(prefix: str = "") -> str:
     """
     Generate unique conversation ID for Iyzico request.
@@ -626,39 +679,87 @@ def format_address_data(address: dict[str, Any], contact_name: str | None = None
     }
 
 
+_LOG_SENSITIVE_FIELDS: frozenset[str] = frozenset(
+    {
+        # Card data
+        "cardNumber",
+        "card_number",
+        "number",
+        "cardNo",
+        "card_no",
+        "pan",
+        "PAN",
+        "cvc",
+        "cvv",
+        "cvv2",
+        "cvc2",
+        "securityCode",
+        "security_code",
+        "expireMonth",
+        "expire_month",
+        "expiryMonth",
+        "expiry_month",
+        "expireYear",
+        "expire_year",
+        "expiryYear",
+        "expiry_year",
+        # API credentials
+        "api_key",
+        "apiKey",
+        "secret_key",
+        "secretKey",
+        "webhook_secret",
+        "webhookSecret",
+        "authorization",
+        "Authorization",
+        # Personally identifiable / quasi-identifying data (KVKK / GDPR).
+        # TCKN (Turkish national ID) is special-category-adjacent and a known
+        # fraud vector; phone, email, and address are direct identifiers.
+        "identityNumber",
+        "identity_number",
+        "tckn",
+        "TCKN",
+        "gsmNumber",
+        "gsm_number",
+        "phone",
+        "phoneNumber",
+        "phone_number",
+        "email",
+        "buyerEmail",
+        "buyer_email",
+        "registrationAddress",
+        "registration_address",
+        "billingAddress",
+        "billing_address",
+        "shippingAddress",
+        "shipping_address",
+    }
+)
+
+
 def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
     """
-    Sanitize data for logging (remove sensitive information).
+    Sanitize a dict for logging.
+
+    Recursively masks card data, API credentials, and PII (TCKN, phone,
+    email, address). The PII set was expanded in v0.4.0 to cover KVKK
+    Article 12 / GDPR Article 32 expectations for log hygiene.
 
     Args:
-        data: Data to sanitize
+        data: Data to sanitize. Non-dicts return ``{}``.
 
     Returns:
-        Sanitized data safe for logging
+        Copy of ``data`` with sensitive values replaced by
+        ``"***REDACTED***"``. Address dicts are replaced wholesale rather
+        than walked, because nested address fields (street, postal code)
+        are also identifying.
     """
     if not isinstance(data, dict):
         return {}
 
     sanitized = data.copy()
 
-    # Remove sensitive fields
-    sensitive_fields = [
-        "cardNumber",
-        "number",
-        "cvc",
-        "cvv",
-        "securityCode",
-        "expireMonth",
-        "expireYear",
-        "expiryMonth",
-        "expiryYear",
-        "api_key",
-        "secret_key",
-        "apiKey",
-        "secretKey",
-    ]
-
-    for field in sensitive_fields:
+    for field in _LOG_SENSITIVE_FIELDS:
         if field in sanitized:
             sanitized[field] = "***REDACTED***"
 
@@ -676,15 +777,22 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
     """
-    Verify webhook HMAC-SHA256 signature.
+    Verify webhook HMAC-SHA256 signature. Fail-closed.
+
+    Returns ``False`` (not ``True``) when ``secret`` is empty — callers
+    must configure ``IYZICO_WEBHOOK_SECRET`` to accept webhooks. Earlier
+    versions returned ``True`` in this case, which silently accepted
+    every payload in any deployment that hadn't yet rotated to a
+    configured secret. That fail-open default is removed in v0.4.0.
 
     Args:
-        payload: Raw request body as bytes
-        signature: Signature from request header
-        secret: Webhook secret key
+        payload: Raw request body as bytes.
+        signature: Signature from request header.
+        secret: Webhook secret key. **Must be non-empty.**
 
     Returns:
-        True if signature is valid, False otherwise
+        True only if the HMAC-SHA256 of ``payload`` keyed by ``secret``
+        matches ``signature`` byte-for-byte.
 
     Example:
         >>> import hashlib
@@ -696,11 +804,15 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
         True
         >>> verify_webhook_signature(payload, "invalid", secret)
         False
+        >>> verify_webhook_signature(payload, sig, "")
+        False
     """
     if not secret:
-        # If no secret is configured, skip validation
-        logger.warning("Webhook secret not configured, skipping signature validation")
-        return True
+        logger.error(
+            "Webhook signature verification rejected: no secret configured. "
+            "Set IYZICO_WEBHOOK_SECRET to accept webhooks."
+        )
+        return False
 
     if not signature:
         logger.warning("Webhook signature missing")

@@ -147,20 +147,84 @@ class StripeProvider(PaymentProvider):
                 error_code="STRIPE_ERROR",
             )
 
-    def confirm_payment(self, provider_payment_id: str) -> PaymentResult:
+    def confirm_payment(
+        self,
+        provider_payment_id: str,
+        *,
+        expected_amount: int | None = None,
+        expected_currency: str | None = None,
+    ) -> PaymentResult:
         """
         Retrieve and confirm a Stripe Payment Intent status.
 
+        Validates ``intent.amount`` (smallest currency unit) and
+        ``intent.currency`` against the caller's expected values when
+        supplied (TOCTOU defense).
+
         Args:
-            provider_payment_id: The Stripe Payment Intent ID (pi_xxx)
+            provider_payment_id: The Stripe Payment Intent ID (pi_xxx).
+            expected_amount: Expected amount in smallest currency unit
+                (cents for USD/EUR, kuruş for TRY).
+            expected_currency: Expected currency code (Stripe lowercases
+                its responses; comparison is case-insensitive).
 
         Returns:
-            PaymentResult with current status
+            PaymentResult with current status. ``success=False`` with
+            ``error_code in {"AMOUNT_MISMATCH","CURRENCY_MISMATCH"}`` on
+            mismatch.
         """
         try:
             intent = self._stripe.PaymentIntent.retrieve(provider_payment_id)
 
             success = intent.status in ("succeeded", "processing")
+
+            if success and expected_amount is not None and expected_currency is not None:
+                provider_currency = (intent.currency or "").lower()
+                if provider_currency != expected_currency.lower():
+                    logger.error(
+                        "Stripe currency mismatch: expected=%s provider=%s "
+                        "intent_id=%s",
+                        expected_currency,
+                        provider_currency,
+                        intent.id,
+                    )
+                    return PaymentResult(
+                        success=False,
+                        provider_payment_id=intent.id,
+                        error_message=(
+                            f"Currency mismatch: expected "
+                            f"{expected_currency.lower()}, provider "
+                            f"reported {provider_currency}"
+                        ),
+                        error_code="CURRENCY_MISMATCH",
+                        raw_response=dict(intent),
+                    )
+                if int(intent.amount) != int(expected_amount):
+                    logger.error(
+                        "Stripe amount mismatch: expected=%d provider=%d "
+                        "intent_id=%s",
+                        expected_amount,
+                        intent.amount,
+                        intent.id,
+                    )
+                    return PaymentResult(
+                        success=False,
+                        provider_payment_id=intent.id,
+                        error_message=(
+                            f"Amount mismatch: expected {expected_amount}, "
+                            f"provider reported {intent.amount}"
+                        ),
+                        error_code="AMOUNT_MISMATCH",
+                        raw_response=dict(intent),
+                    )
+            elif success:
+                logger.warning(
+                    "Stripe confirm_payment called without expected_amount/"
+                    "expected_currency — caller is responsible for TOCTOU "
+                    "validation. Strongly recommended to supply both for "
+                    "v0.4.0+."
+                )
+
             return PaymentResult(
                 success=success,
                 provider_payment_id=intent.id,

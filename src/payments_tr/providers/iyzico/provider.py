@@ -20,6 +20,7 @@ from payments_tr.providers.base import (
     RefundResult,
     WebhookResult,
 )
+from payments_tr.providers.iyzico.utils import kurus_to_try_string
 
 logger = logging.getLogger(__name__)
 
@@ -151,28 +152,33 @@ class IyzicoProvider(PaymentProvider):
                 error_code=error_code,
             )
 
-    def confirm_payment(self, provider_payment_id: str) -> PaymentResult:
+    def confirm_payment(
+        self,
+        provider_payment_id: str,
+        *,
+        expected_amount: int | None = None,
+        expected_currency: str | None = None,
+    ) -> PaymentResult:
         """
         Confirm an iyzico payment by retrieving the checkout form result.
 
+        Validates the provider-reported ``paidPrice`` and ``currency``
+        against the caller's expected values when supplied (TOCTOU
+        defense). See :meth:`PaymentProvider.confirm_payment`.
+
         Args:
-            provider_payment_id: The iyzico token from the checkout form
+            provider_payment_id: The iyzico token from the checkout form.
+            expected_amount: Expected amount in kuruş (integer).
+            expected_currency: Expected currency code (e.g. ``"TRY"``).
 
         Returns:
-            PaymentResult with confirmation status
+            PaymentResult with confirmation status.
         """
         try:
             response = self._client.retrieve_checkout_form(provider_payment_id)
 
             # Response is a CheckoutFormResultResponse object
-            if response.is_successful() and response.payment_status == "SUCCESS":
-                return PaymentResult(
-                    success=True,
-                    provider_payment_id=response.payment_id,
-                    status="succeeded",
-                    raw_response=response.to_dict(),
-                )
-            else:
+            if not (response.is_successful() and response.payment_status == "SUCCESS"):
                 error_message = response.error_message or "Payment not successful"
                 return PaymentResult(
                     success=False,
@@ -180,6 +186,33 @@ class IyzicoProvider(PaymentProvider):
                     status=response.payment_status or "FAILURE",
                     raw_response=response.to_dict(),
                 )
+
+            # Provider says success — now make sure they paid for what
+            # WE think they bought. Iyzico returns paidPrice in TRY (e.g.
+            # "29.99"); convert to kuruş for an integer comparison that
+            # cannot drift on float rounding.
+            if expected_amount is None or expected_currency is None:
+                logger.warning(
+                    "confirm_payment called without expected_amount/"
+                    "expected_currency — caller is responsible for "
+                    "TOCTOU validation. Strongly recommended to supply "
+                    "both for v0.4.0+."
+                )
+            else:
+                mismatch = self._validate_amount_currency(
+                    response,
+                    expected_amount=expected_amount,
+                    expected_currency=expected_currency,
+                )
+                if mismatch is not None:
+                    return mismatch
+
+            return PaymentResult(
+                success=True,
+                provider_payment_id=response.payment_id,
+                status="succeeded",
+                raw_response=response.to_dict(),
+            )
 
         except Exception as e:
             # Extract error details if available
@@ -191,6 +224,77 @@ class IyzicoProvider(PaymentProvider):
                 error_message=error_message,
                 error_code=error_code,
             )
+
+    @staticmethod
+    def _validate_amount_currency(
+        response: Any,
+        *,
+        expected_amount: int,
+        expected_currency: str,
+    ) -> PaymentResult | None:
+        """
+        Compare provider-reported amount/currency with expected values.
+
+        Returns a failing PaymentResult on mismatch, or None when valid.
+        Comparisons are done in the smallest unit (kuruş) using Decimal
+        to avoid float drift.
+        """
+        from decimal import Decimal
+
+        provider_currency = (response.currency or "").upper()
+        if provider_currency != expected_currency.upper():
+            logger.error(
+                "Iyzico currency mismatch: expected=%s provider=%s "
+                "payment_id=%s",
+                expected_currency,
+                provider_currency,
+                response.payment_id,
+            )
+            return PaymentResult(
+                success=False,
+                error_message=(
+                    f"Currency mismatch: expected {expected_currency}, "
+                    f"provider reported {provider_currency}"
+                ),
+                error_code="CURRENCY_MISMATCH",
+                raw_response=response.to_dict(),
+            )
+
+        paid_price = response.paid_price  # Decimal in TRY (e.g. 29.99)
+        if paid_price is None:
+            logger.error(
+                "Iyzico response missing paidPrice for payment_id=%s",
+                response.payment_id,
+            )
+            return PaymentResult(
+                success=False,
+                error_message="Provider response missing paid amount",
+                error_code="AMOUNT_MISSING",
+                raw_response=response.to_dict(),
+            )
+
+        # Convert kuruş int → Decimal TRY for comparison.
+        expected_decimal = Decimal(int(expected_amount)) / Decimal(100)
+        if paid_price != expected_decimal:
+            logger.error(
+                "Iyzico amount mismatch: expected=%s provider=%s "
+                "payment_id=%s",
+                expected_decimal,
+                paid_price,
+                response.payment_id,
+            )
+            return PaymentResult(
+                success=False,
+                error_message=(
+                    f"Amount mismatch: expected {expected_decimal:.2f} "
+                    f"{expected_currency}, provider reported "
+                    f"{paid_price:.2f} {provider_currency}"
+                ),
+                error_code="AMOUNT_MISMATCH",
+                raw_response=response.to_dict(),
+            )
+
+        return None
 
     def create_refund(
         self,
@@ -369,12 +473,14 @@ class IyzicoProvider(PaymentProvider):
 
         buyer_dict = buyer_info.to_dict()
 
-        # Build order data
+        # Build order data — money MUST go through Decimal (never float)
+        # because Iyzico signs the request body; float drift breaks the HMAC.
+        price_str = kurus_to_try_string(payment.amount)
         order_data = {
             "locale": locale,
             "conversationId": str(payment.id),
-            "price": str(payment.amount / 100),  # Convert kuruş to TRY string
-            "paidPrice": str(payment.amount / 100),
+            "price": price_str,
+            "paidPrice": price_str,
             "currency": currency.upper(),
             "basketId": str(payment.id),
             "paymentGroup": "PRODUCT",
@@ -398,7 +504,7 @@ class IyzicoProvider(PaymentProvider):
                 "name": "Payment",
                 "category1": "Service",
                 "itemType": "VIRTUAL",
-                "price": str(payment.amount / 100),  # Convert kuruş to TRY string
+                "price": kurus_to_try_string(payment.amount),
             }
         ]
 

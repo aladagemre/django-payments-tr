@@ -29,11 +29,22 @@ class MockCheckoutFormResponse:
 class MockCheckoutFormResultResponse:
     """Mock iyzico checkout form result response."""
 
-    def __init__(self, success=True, payment_id="pay_123"):
+    def __init__(
+        self,
+        success=True,
+        payment_id="pay_123",
+        paid_price=None,
+        currency="TRY",
+    ):
+        from decimal import Decimal
+
         self._success = success
         self.payment_id = payment_id
         self.payment_status = "SUCCESS" if success else "FAILURE"
         self.error_message = None if success else "Payment failed"
+        # Default 100.00 TRY = 10000 kuruş, the same value most fixtures use.
+        self.paid_price = Decimal(str(paid_price)) if paid_price is not None else Decimal("100.00")
+        self.currency = currency
 
     def is_successful(self):
         return self._success
@@ -42,6 +53,8 @@ class MockCheckoutFormResultResponse:
         return {
             "paymentId": self.payment_id,
             "paymentStatus": self.payment_status,
+            "paidPrice": str(self.paid_price),
+            "currency": self.currency,
         }
 
 
@@ -304,3 +317,72 @@ class TestIyzicoProvider:
 
         buyer_info = iyzico_provider._extract_buyer_info(mock_payment)
         assert buyer_info.email == "client@example.com"
+
+
+class TestIyzicoTOCTOU:
+    """v0.4.0 TOCTOU defense: confirm_payment validates amount + currency."""
+
+    def test_amount_match_passes(self, iyzico_provider, mock_iyzico_client):
+        # 100.00 TRY = 10000 kuruş
+        result = iyzico_provider.confirm_payment(
+            "tok_x",
+            expected_amount=10000,
+            expected_currency="TRY",
+        )
+        assert result.success is True
+        assert result.status == "succeeded"
+
+    def test_amount_mismatch_rejects(self, iyzico_provider, mock_iyzico_client):
+        # Provider says 100.00 TRY (10000 kuruş), caller expected 10.00 TRY (1000).
+        result = iyzico_provider.confirm_payment(
+            "tok_x",
+            expected_amount=1000,
+            expected_currency="TRY",
+        )
+        assert result.success is False
+        assert result.error_code == "AMOUNT_MISMATCH"
+        assert "expected 10.00" in result.error_message
+        assert "100.00" in result.error_message
+
+    def test_currency_mismatch_rejects(self, iyzico_provider, mock_iyzico_client):
+        # Provider says TRY, caller expected EUR.
+        result = iyzico_provider.confirm_payment(
+            "tok_x",
+            expected_amount=10000,
+            expected_currency="EUR",
+        )
+        assert result.success is False
+        assert result.error_code == "CURRENCY_MISMATCH"
+
+    def test_currency_compare_is_case_insensitive(self, iyzico_provider, mock_iyzico_client):
+        result = iyzico_provider.confirm_payment(
+            "tok_x",
+            expected_amount=10000,
+            expected_currency="try",  # lowercase
+        )
+        assert result.success is True
+
+    def test_no_expected_values_warns_and_passes(
+        self, iyzico_provider, mock_iyzico_client, caplog
+    ):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            result = iyzico_provider.confirm_payment("tok_x")
+        assert result.success is True
+        assert any("TOCTOU" in r.message for r in caplog.records)
+
+    def test_amount_missing_in_response_rejects(
+        self, iyzico_provider, mock_iyzico_client
+    ):
+        from unittest.mock import MagicMock
+
+        bad_response = MockCheckoutFormResultResponse(success=True)
+        bad_response.paid_price = None  # Provider response missing amount
+        iyzico_provider._client.retrieve_checkout_form = MagicMock(return_value=bad_response)
+
+        result = iyzico_provider.confirm_payment(
+            "tok_x", expected_amount=10000, expected_currency="TRY"
+        )
+        assert result.success is False
+        assert result.error_code == "AMOUNT_MISSING"
