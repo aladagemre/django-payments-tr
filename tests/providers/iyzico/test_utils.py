@@ -856,3 +856,91 @@ class TestIsIpAllowed:
         assert is_ip_allowed("192.168.1.0", allowed_ips) is True
         assert is_ip_allowed("192.168.1.3", allowed_ips) is True
         assert is_ip_allowed("192.168.1.4", allowed_ips) is False
+
+
+class TestGetClientIp:
+    """Tests for get_client_ip — security-critical for PCI-DSS buyer-IP capture."""
+
+    def _make_request(self, remote_addr="10.0.0.1", xff=None):
+        from django.http import HttpRequest
+
+        request = HttpRequest()
+        request.META["REMOTE_ADDR"] = remote_addr
+        if xff is not None:
+            request.META["HTTP_X_FORWARDED_FOR"] = xff
+        return request
+
+    def test_defaults_to_remote_addr_when_xff_disabled(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(remote_addr="10.0.0.1", xff="203.0.113.5")
+        assert get_client_ip(req, trust_xff=False) == "10.0.0.1"
+
+    def test_uses_xff_when_enabled(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(remote_addr="10.0.0.1", xff="203.0.113.5")
+        assert get_client_ip(req, trust_xff=True) == "203.0.113.5"
+
+    def test_uses_first_xff_entry(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(xff="203.0.113.5, 198.51.100.1, 10.0.0.1")
+        assert get_client_ip(req, trust_xff=True) == "203.0.113.5"
+
+    def test_invalid_xff_falls_back_to_remote_addr(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(remote_addr="10.0.0.1", xff="not-an-ip")
+        assert get_client_ip(req, trust_xff=True) == "10.0.0.1"
+
+    def test_rejects_injection_in_xff(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(
+            remote_addr="10.0.0.1",
+            xff="1.2.3.4 ; rm -rf /",
+        )
+        # Should NOT pass arbitrary string through; falls back.
+        assert get_client_ip(req, trust_xff=True) == "10.0.0.1"
+
+    def test_accepts_ipv6(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(xff="2001:db8::1")
+        assert get_client_ip(req, trust_xff=True) == "2001:db8::1"
+
+    def test_strips_ipv4_port(self):
+        """AWS ALB / nginx may emit IPv4:port in XFF."""
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(xff="203.0.113.5:54321")
+        assert get_client_ip(req, trust_xff=True) == "203.0.113.5"
+
+    def test_strips_bracketed_ipv6(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(xff="[2001:db8::1]")
+        assert get_client_ip(req, trust_xff=True) == "2001:db8::1"
+
+    def test_strips_bracketed_ipv6_with_port(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(xff="[2001:db8::1]:8080")
+        assert get_client_ip(req, trust_xff=True) == "2001:db8::1"
+
+    def test_empty_xff_falls_back_to_remote_addr(self):
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        req = self._make_request(remote_addr="10.0.0.1", xff="")
+        assert get_client_ip(req, trust_xff=True) == "10.0.0.1"
+
+    def test_missing_remote_addr_returns_empty_string(self):
+        from django.http import HttpRequest
+
+        from payments_tr.providers.iyzico.utils import get_client_ip
+
+        request = HttpRequest()
+        # No REMOTE_ADDR set at all
+        request.META.pop("REMOTE_ADDR", None)
+        assert get_client_ip(request, trust_xff=False) == ""

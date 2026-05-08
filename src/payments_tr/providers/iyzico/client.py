@@ -791,7 +791,7 @@ class IyzicoClient:
                 error_code="MISSING_TOKEN",
             )
 
-        logger.info(f"Retrieving checkout form result - token_prefix={token[:8]}...")
+        logger.info(f"Retrieving checkout form result - token_prefix={token[:8]}***")
 
         try:
             # Call Iyzico Checkout Form Retrieve API

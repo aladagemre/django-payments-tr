@@ -917,23 +917,26 @@ def get_client_ip(request, trust_xff: bool | None = None) -> str:
     """
     Get client IP address from Django request.
 
-    This is the centralized IP extraction function that respects the
-    IYZICO_TRUST_X_FORWARDED_FOR setting. All code in the package
-    should use this function for consistent security behavior.
+    Uses REMOTE_ADDR by default (set by the WSGI server / reverse proxy),
+    which is the only trustworthy source. X-Forwarded-For is only read
+    when explicitly enabled via IYZICO_TRUST_X_FORWARDED_FOR, and even
+    then the extracted IP is validated for format correctness.
 
     Args:
         request: Django HttpRequest object
         trust_xff: Whether to trust X-Forwarded-For header.
                    If None, uses iyzico_settings.trust_x_forwarded_for.
-                   Set to False to always use REMOTE_ADDR.
+                   Set to False to always use REMOTE_ADDR (recommended).
 
     Returns:
         Client IP address string (empty string if not available)
 
     Security Note:
+        X-Forwarded-For is user-controllable and trivially spoofed.
         Only set trust_xff=True if your application is behind a trusted
-        reverse proxy that properly sets the X-Forwarded-For header.
-        Otherwise, attackers can spoof their IP address.
+        reverse proxy (e.g., nginx, AWS ALB) that overwrites the header.
+        For robust IP detection behind proxies, consider django-ipware
+        with TRUSTED_PROXY_LIST configured.
 
     Example:
         >>> from payments_tr.providers.iyzico.utils import get_client_ip
@@ -948,8 +951,45 @@ def get_client_ip(request, trust_xff: bool | None = None) -> str:
     if trust_xff:
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            # Take the first IP in the chain (client IP)
-            ip = x_forwarded_for.split(",")[0].strip()
-            return ip
+            # Take the first IP in the chain (client IP from trusted proxy)
+            raw = x_forwarded_for.split(",")[0].strip()
+            candidate_ip = _strip_port_and_brackets(raw)
+            # Validate that extracted value is actually a valid IP address
+            # to prevent injection of arbitrary strings via spoofed headers
+            try:
+                ipaddress.ip_address(candidate_ip)
+                return candidate_ip
+            except ValueError:
+                logger.warning(
+                    f"Invalid IP in X-Forwarded-For header: "
+                    f"{candidate_ip[:50]}... - falling back to REMOTE_ADDR"
+                )
 
     return request.META.get("REMOTE_ADDR", "")
+
+
+def _strip_port_and_brackets(candidate: str) -> str:
+    """
+    Normalize an X-Forwarded-For entry into a bare IP address.
+
+    Some proxies (AWS ALB, certain nginx configs) emit forms like
+    ``203.0.113.5:54321`` or ``[2001:db8::1]:8080``. ``ipaddress.ip_address``
+    rejects both, so we strip the optional bracketed-IPv6 wrapper and an
+    appended ``:port`` (only when unambiguous — bare IPv6 contains many
+    colons and must not be touched).
+
+    Args:
+        candidate: Raw token from the XFF header.
+
+    Returns:
+        Token with bracket/port noise removed; format validation is left
+        to the caller.
+    """
+    if candidate.startswith("["):
+        end = candidate.find("]")
+        if end != -1:
+            return candidate[1:end]
+    # Single colon means IPv4:port (bare IPv6 always has multiple).
+    if candidate.count(":") == 1:
+        return candidate.rsplit(":", 1)[0]
+    return candidate
