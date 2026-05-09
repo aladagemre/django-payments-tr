@@ -59,8 +59,9 @@ class TestIyzicoConnectionTimeout:
         ``HTTPSConnection`` with ``timeout=`` set to the configured value.
         """
         # Importing the client module triggers the monkey-patch.
-        from payments_tr.providers.iyzico import client  # noqa: F401
         from iyzipay.iyzipay_resource import IyzipayResource
+
+        from payments_tr.providers.iyzico import client  # noqa: F401
 
         resource = IyzipayResource()
         fake_https = MagicMock()
@@ -80,6 +81,4 @@ class TestIyzicoConnectionTimeout:
                 request_body_dict={"foo": "bar"},
             )
 
-        fake_https.assert_called_once_with(
-            "https://sandbox-api.iyzipay.com", timeout=12.0
-        )
+        fake_https.assert_called_once_with("https://sandbox-api.iyzipay.com", timeout=12.0)

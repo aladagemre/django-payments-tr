@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-05-10
+
+Patch release. Four small but load-bearing fixes around concurrency,
+outbound resilience, and SAST hygiene. No public API change.
+
+### Fixed
+
+- **Subscription manager webhook race.** `_handle_failed_payment` and
+  `_handle_successful_payment` previously did a full-row
+  `subscription.save()` after mutating two or three columns. Concurrent
+  webhook delivery for the same subscription would field-stomp: the
+  helper's UPDATE overwrote sibling columns (e.g. `last_payment_attempt`)
+  that another writer had just committed. Both helpers now use
+  `save(update_fields=[...])` listing only the columns they mutate, plus
+  `updated_at`. Audited every other `subscription.save()` callsite on a
+  write path in the same module — `cancel_subscription` (both branches),
+  `pause_subscription`, `resume_subscription`, `upgrade_subscription`,
+  `downgrade_subscription` (both branches) — and converted them all the
+  same way. The lone `super().save(*args, **kwargs)` in
+  `PaymentMethod.save()` is a save-override that intentionally persists
+  the full row and stays as-is.
+
+### Security
+
+- **Outbound HTTPS timeout for the iyzipay SDK.** The bundled `iyzipay`
+  SDK (v1.0.45) constructs `http.client.HTTPSConnection(options['base_url'])`
+  in `IyzipayResource.connect` with no `timeout=`. A slow / hung Iyzico
+  endpoint could therefore pin a Celery or gunicorn worker thread until
+  the kernel-level TCP timeout (often minutes) — a real DoS amplification
+  vector. We now monkey-patch `IyzipayResource.connect` at module import
+  to thread an explicit timeout through to the underlying
+  `HTTPSConnection`. New setting `IYZICO_CONNECTION_TIMEOUT` (default
+  30 s) exposes the value. The patch reads the setting lazily on each
+  call so test-time `override_settings` is honoured. Documented in
+  `SECURITY.md` Production Checklist with a new "Outbound HTTPS timeout"
+  subsection. Chose the SDK monkey-patch over `socket.setdefaulttimeout()`
+  because the latter would change the timeout of every socket in the
+  Python process (Postgres, Redis, internal RPC, …) — far too broad.
+
+### Documentation
+
+- **README "Data Processing & Sub-processors" section.** Adds the
+  GDPR Art. 30 / KVKK Art. 16 disclosure that downstream integrators
+  need to populate their RoPA. Covers Iyzico (Türkiye, SCC-based
+  transfer mechanism) and Stripe (Ireland for EU, US for global,
+  Stripe DPA reference), the exhaustive list of fields sent on each
+  flow, what the library keeps in the integrator's own DB versus what
+  is forwarded to providers, and a worked `cleanup_old_payments`
+  invocation cross-linked from `SECURITY.md`.
+
+### Internal
+
+- **Audited 14 Bandit B308/B703 `mark_safe()` hits in admin code.**
+  Reviewed every callsite in `eft/admin.py` (4) and
+  `providers/iyzico/admin.py` (10). Eight are static-literal calls
+  with no interpolation. Three are dynamic builders that route every
+  interpolated value through `django.utils.html.escape` before string
+  concatenation. Zero risky callsites; no rewrites needed. Added inline
+  `# nosec` directives plus an audit comment so future SAST sweeps do
+  not have to re-derive the analysis.
+
 ## [0.5.0] - 2026-05-08
 
 This release adds Iyzico marketplace ("işyeri gelir paylaşımı") support so

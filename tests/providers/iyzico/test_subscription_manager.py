@@ -986,9 +986,7 @@ class TestSubscriptionManagerPartialUpdates:
 
         # A concurrent transaction writes a sibling column and commits.
         sibling_ts = timezone.now() + timedelta(seconds=42)
-        Subscription.objects.filter(pk=subscription.pk).update(
-            last_payment_attempt=sibling_ts
-        )
+        Subscription.objects.filter(pk=subscription.pk).update(last_payment_attempt=sibling_ts)
 
         # The helper saves on the stale instance. With update_fields it must
         # only touch failed_payment_count / last_payment_error / status, so
