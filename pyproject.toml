@@ -103,6 +103,10 @@ src = ["src", "tests"]
 # Match the CI preview-mode default so local lint catches the same rules
 # (e.g. UP042 / StrEnum) that gate the build.
 preview = true
+# Markdown contains illustrative-only code blocks (CHANGELOG migration
+# samples, README usage snippets); preview-mode ruff tries to format
+# them, which breaks on intentionally-elided syntax.
+extend-exclude = ["*.md", "docs/"]
 
 [tool.ruff.lint]
 select = [
