@@ -182,7 +182,7 @@ class TestPerCountryProviderSelection:
         settings.PAYMENT_PROVIDER = "stripe"
         # Remove the setting if it exists
         if hasattr(settings, "PAYMENT_PROVIDERS_BY_COUNTRY"):
-            delattr(settings, "PAYMENT_PROVIDERS_BY_COUNTRY")
+            del settings.PAYMENT_PROVIDERS_BY_COUNTRY
 
         provider = get_payment_provider(country_code="TR")
         assert isinstance(provider, MockStripeProvider)  # Falls back to default

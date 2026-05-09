@@ -363,7 +363,7 @@ class TestRefundAction:
         original_method = AbstractIyzicoPayment.process_refund
 
         # Delete the method from the parent class temporarily
-        delattr(AbstractIyzicoPayment, "process_refund")
+        del AbstractIyzicoPayment.process_refund
 
         try:
             queryset = TestPayment.objects.filter(id=sample_payment.id)
