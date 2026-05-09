@@ -19,24 +19,22 @@ logger = logging.getLogger(__name__)
 
 
 # Known invalid/test BIN prefixes that should be rejected in production
-INVALID_TEST_BINS: set[str] = frozenset(
-    {
-        "000000",
-        "111111",
-        "222222",
-        "333333",
-        "444444",
-        "555555",
-        "666666",
-        "777777",
-        "888888",
-        "999999",
-        "123456",
-        "654321",
-        "012345",
-        "543210",
-    }
-)
+INVALID_TEST_BINS: set[str] = frozenset({
+    "000000",
+    "111111",
+    "222222",
+    "333333",
+    "444444",
+    "555555",
+    "666666",
+    "777777",
+    "888888",
+    "999999",
+    "123456",
+    "654321",
+    "012345",
+    "543210",
+})
 
 # Valid Major Industry Identifier (MII) first digits for payment cards
 # 3 = Travel/Entertainment (Amex, Diners)

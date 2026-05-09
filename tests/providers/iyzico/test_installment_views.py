@@ -369,13 +369,11 @@ class TestValidateInstallmentView(TestCase):
 
         request = self.factory.post(
             "/installments/validate/",
-            data=json.dumps(
-                {
-                    "bin": "554960",
-                    "amount": "100.00",
-                    "installment": 3,
-                }
-            ),
+            data=json.dumps({
+                "bin": "554960",
+                "amount": "100.00",
+                "installment": 3,
+            }),
             content_type="application/json",
         )
 
@@ -396,13 +394,11 @@ class TestValidateInstallmentView(TestCase):
 
         request = self.factory.post(
             "/installments/validate/",
-            data=json.dumps(
-                {
-                    "bin": "554960",
-                    "amount": "100.00",
-                    "installment": 9,
-                }
-            ),
+            data=json.dumps({
+                "bin": "554960",
+                "amount": "100.00",
+                "installment": 9,
+            }),
             content_type="application/json",
         )
 
@@ -433,13 +429,11 @@ class TestValidateInstallmentView(TestCase):
         """Test with missing parameters."""
         request = self.factory.post(
             "/installments/validate/",
-            data=json.dumps(
-                {
-                    "bin": "554960",
-                    "amount": "100.00",
-                    # Missing 'installment'
-                }
-            ),
+            data=json.dumps({
+                "bin": "554960",
+                "amount": "100.00",
+                # Missing 'installment'
+            }),
             content_type="application/json",
         )
 
@@ -458,13 +452,11 @@ class TestValidateInstallmentView(TestCase):
 
         request = self.factory.post(
             "/installments/validate/",
-            data=json.dumps(
-                {
-                    "bin": "554960",
-                    "amount": "100.00",
-                    "installment": 3,
-                }
-            ),
+            data=json.dumps({
+                "bin": "554960",
+                "amount": "100.00",
+                "installment": 3,
+            }),
             content_type="application/json",
         )
 
@@ -736,13 +728,11 @@ class TestInstallmentViewsIntegration(TestCase):
         validate_view = ValidateInstallmentView()
         request2 = self.factory.post(
             "/installments/validate/",
-            data=json.dumps(
-                {
-                    "bin": "554960",
-                    "amount": "100.00",
-                    "installment": 3,
-                }
-            ),
+            data=json.dumps({
+                "bin": "554960",
+                "amount": "100.00",
+                "installment": 3,
+            }),
             content_type="application/json",
         )
         response2 = validate_view.post(request2)

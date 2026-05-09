@@ -20,74 +20,70 @@ logger = logging.getLogger(__name__)
 
 
 # Comprehensive list of sensitive field names to mask/remove
-SENSITIVE_CARD_FIELDS = frozenset(
-    {
-        # Card numbers
-        "cardNumber",
-        "card_number",
-        "number",
-        "cardNo",
-        "card_no",
-        "pan",
-        "PAN",
-        "primaryAccountNumber",
-        # Security codes
-        "cvc",
-        "cvv",
-        "cvv2",
-        "cvc2",
-        "securityCode",
-        "security_code",
-        "cid",
-        "CID",
-        "cardSecurityCode",
-        "card_security_code",
-        # Expiry dates
-        "expireMonth",
-        "expire_month",
-        "expiryMonth",
-        "expiry_month",
-        "expireYear",
-        "expire_year",
-        "expiryYear",
-        "expiry_year",
-        "expiry",
-        "expirationDate",
-        "expiration_date",
-        "exp",
-        # PIN and passwords
-        "pin",
-        "PIN",
-        "password",
-        "passwd",
-        # Tokens (might need to keep for recurring payments, handle carefully)
-        # 'cardToken' - NOT in this list as it may be needed
-    }
-)
+SENSITIVE_CARD_FIELDS = frozenset({
+    # Card numbers
+    "cardNumber",
+    "card_number",
+    "number",
+    "cardNo",
+    "card_no",
+    "pan",
+    "PAN",
+    "primaryAccountNumber",
+    # Security codes
+    "cvc",
+    "cvv",
+    "cvv2",
+    "cvc2",
+    "securityCode",
+    "security_code",
+    "cid",
+    "CID",
+    "cardSecurityCode",
+    "card_security_code",
+    # Expiry dates
+    "expireMonth",
+    "expire_month",
+    "expiryMonth",
+    "expiry_month",
+    "expireYear",
+    "expire_year",
+    "expiryYear",
+    "expiry_year",
+    "expiry",
+    "expirationDate",
+    "expiration_date",
+    "exp",
+    # PIN and passwords
+    "pin",
+    "PIN",
+    "password",
+    "passwd",
+    # Tokens (might need to keep for recurring payments, handle carefully)
+    # 'cardToken' - NOT in this list as it may be needed
+})
 
 # Fields that are safe to keep (non-sensitive)
-SAFE_CARD_FIELDS = frozenset(
-    {
-        "cardType",
-        "card_type",
-        "cardFamily",
-        "card_family",
-        "cardAssociation",
-        "card_association",
-        "cardBankName",
-        "card_bank_name",
-        "cardBankCode",
-        "card_bank_code",
-        "cardHolderName",
-        "holderName",
-        "lastFourDigits",
-        "last_four",
-        "binNumber",
-        "bin_number",
-        "cardToken",
-        "cardUserKey",  # Tokens are safe (references, not actual data)
-    }
-)
+SAFE_CARD_FIELDS = frozenset({
+    "cardType",
+    "card_type",
+    "cardFamily",
+    "card_family",
+    "cardAssociation",
+    "card_association",
+    "cardBankName",
+    "card_bank_name",
+    "cardBankCode",
+    "card_bank_code",
+    "cardHolderName",
+    "holderName",
+    "lastFourDigits",
+    "last_four",
+    "binNumber",
+    "bin_number",
+    "cardToken",
+    "cardUserKey",  # Tokens are safe (references, not actual data)
+})
 
 
 def mask_card_data(payment_details: dict[str, Any]) -> dict[str, Any]:
@@ -679,62 +675,60 @@ def format_address_data(address: dict[str, Any], contact_name: str | None = None
     }
 
 
-_LOG_SENSITIVE_FIELDS: frozenset[str] = frozenset(
-    {
-        # Card data
-        "cardNumber",
-        "card_number",
-        "number",
-        "cardNo",
-        "card_no",
-        "pan",
-        "PAN",
-        "cvc",
-        "cvv",
-        "cvv2",
-        "cvc2",
-        "securityCode",
-        "security_code",
-        "expireMonth",
-        "expire_month",
-        "expiryMonth",
-        "expiry_month",
-        "expireYear",
-        "expire_year",
-        "expiryYear",
-        "expiry_year",
-        # API credentials
-        "api_key",
-        "apiKey",
-        "secret_key",
-        "secretKey",
-        "webhook_secret",
-        "webhookSecret",
-        "authorization",
-        "Authorization",
-        # Personally identifiable / quasi-identifying data (KVKK / GDPR).
-        # TCKN (Turkish national ID) is special-category-adjacent and a known
-        # fraud vector; phone, email, and address are direct identifiers.
-        "identityNumber",
-        "identity_number",
-        "tckn",
-        "TCKN",
-        "gsmNumber",
-        "gsm_number",
-        "phone",
-        "phoneNumber",
-        "phone_number",
-        "email",
-        "buyerEmail",
-        "buyer_email",
-        "registrationAddress",
-        "registration_address",
-        "billingAddress",
-        "billing_address",
-        "shippingAddress",
-        "shipping_address",
-    }
-)
+_LOG_SENSITIVE_FIELDS: frozenset[str] = frozenset({
+    # Card data
+    "cardNumber",
+    "card_number",
+    "number",
+    "cardNo",
+    "card_no",
+    "pan",
+    "PAN",
+    "cvc",
+    "cvv",
+    "cvv2",
+    "cvc2",
+    "securityCode",
+    "security_code",
+    "expireMonth",
+    "expire_month",
+    "expiryMonth",
+    "expiry_month",
+    "expireYear",
+    "expire_year",
+    "expiryYear",
+    "expiry_year",
+    # API credentials
+    "api_key",
+    "apiKey",
+    "secret_key",
+    "secretKey",
+    "webhook_secret",
+    "webhookSecret",
+    "authorization",
+    "Authorization",
+    # Personally identifiable / quasi-identifying data (KVKK / GDPR).
+    # TCKN (Turkish national ID) is special-category-adjacent and a known
+    # fraud vector; phone, email, and address are direct identifiers.
+    "identityNumber",
+    "identity_number",
+    "tckn",
+    "TCKN",
+    "gsmNumber",
+    "gsm_number",
+    "phone",
+    "phoneNumber",
+    "phone_number",
+    "email",
+    "buyerEmail",
+    "buyer_email",
+    "registrationAddress",
+    "registration_address",
+    "billingAddress",
+    "billing_address",
+    "shippingAddress",
+    "shipping_address",
+})
 
 
 def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:

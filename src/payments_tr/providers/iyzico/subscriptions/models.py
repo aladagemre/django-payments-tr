@@ -222,17 +222,13 @@ class PaymentMethod(models.Model):
             try:
                 month = int(self.expiry_month)
                 if not (1 <= month <= 12):
-                    raise ValidationError(
-                        {
-                            "expiry_month": _("Must be between 01 and 12"),
-                        }
-                    )
+                    raise ValidationError({
+                        "expiry_month": _("Must be between 01 and 12"),
+                    })
             except ValueError as e:
-                raise ValidationError(
-                    {
-                        "expiry_month": _("Must be a valid month number"),
-                    }
-                ) from e
+                raise ValidationError({
+                    "expiry_month": _("Must be a valid month number"),
+                }) from e
 
         # Validate expiry year
         if self.expiry_year:
@@ -240,35 +236,27 @@ class PaymentMethod(models.Model):
                 year = int(self.expiry_year)
                 current_year = timezone.now().year
                 if not (current_year <= year <= current_year + 20):
-                    raise ValidationError(
-                        {
-                            "expiry_year": _("Must be a valid future year"),
-                        }
-                    )
+                    raise ValidationError({
+                        "expiry_year": _("Must be a valid future year"),
+                    })
             except ValueError as e:
-                raise ValidationError(
-                    {
-                        "expiry_year": _("Must be a valid year"),
-                    }
-                ) from e
+                raise ValidationError({
+                    "expiry_year": _("Must be a valid year"),
+                }) from e
 
         # Validate last four digits
         if self.card_last_four:
             if len(self.card_last_four) != 4 or not self.card_last_four.isdigit():
-                raise ValidationError(
-                    {
-                        "card_last_four": _("Must be exactly 4 digits"),
-                    }
-                )
+                raise ValidationError({
+                    "card_last_four": _("Must be exactly 4 digits"),
+                })
 
         # Validate BIN if provided
         if self.bin_number:
             if len(self.bin_number) != 6 or not self.bin_number.isdigit():
-                raise ValidationError(
-                    {
-                        "bin_number": _("Must be exactly 6 digits"),
-                    }
-                )
+                raise ValidationError({
+                    "bin_number": _("Must be exactly 6 digits"),
+                })
 
     def is_expired(self) -> bool:
         """
@@ -519,27 +507,21 @@ class SubscriptionPlan(models.Model):
 
         # Validate billing interval count
         if self.billing_interval_count < 1:
-            raise ValidationError(
-                {
-                    "billing_interval_count": _("Must be at least 1"),
-                }
-            )
+            raise ValidationError({
+                "billing_interval_count": _("Must be at least 1"),
+            })
 
         # Validate trial period
         if self.trial_period_days < 0:
-            raise ValidationError(
-                {
-                    "trial_period_days": _("Cannot be negative"),
-                }
-            )
+            raise ValidationError({
+                "trial_period_days": _("Cannot be negative"),
+            })
 
         # Validate max subscribers
         if self.max_subscribers is not None and self.max_subscribers < 0:
-            raise ValidationError(
-                {
-                    "max_subscribers": _("Cannot be negative"),
-                }
-            )
+            raise ValidationError({
+                "max_subscribers": _("Cannot be negative"),
+            })
 
     def get_total_trial_days(self) -> int:
         """Get total trial period in days."""
@@ -733,19 +715,15 @@ class Subscription(models.Model):
 
         # Validate period dates
         if self.current_period_end <= self.current_period_start:
-            raise ValidationError(
-                {
-                    "current_period_end": _("Must be after current_period_start"),
-                }
-            )
+            raise ValidationError({
+                "current_period_end": _("Must be after current_period_start"),
+            })
 
         # Validate trial dates
         if self.trial_end_date and self.trial_end_date < self.start_date:
-            raise ValidationError(
-                {
-                    "trial_end_date": _("Must be after start_date"),
-                }
-            )
+            raise ValidationError({
+                "trial_end_date": _("Must be after start_date"),
+            })
 
     def is_active(self) -> bool:
         """Check if subscription is active."""
@@ -928,27 +906,21 @@ class SubscriptionPayment(AbstractIyzicoPayment):
 
         # Validate period dates
         if self.period_end <= self.period_start:
-            raise ValidationError(
-                {
-                    "period_end": _("Must be after period_start"),
-                }
-            )
+            raise ValidationError({
+                "period_end": _("Must be after period_start"),
+            })
 
         # Validate attempt number
         if self.attempt_number < 1:
-            raise ValidationError(
-                {
-                    "attempt_number": _("Must be at least 1"),
-                }
-            )
+            raise ValidationError({
+                "attempt_number": _("Must be at least 1"),
+            })
 
         # If retry, attempt number should be > 1
         if self.is_retry and self.attempt_number == 1:
-            raise ValidationError(
-                {
-                    "is_retry": _("Retry payments must have attempt_number > 1"),
-                }
-            )
+            raise ValidationError({
+                "is_retry": _("Retry payments must have attempt_number > 1"),
+            })
 
     def get_effective_amount(self) -> Decimal:
         """

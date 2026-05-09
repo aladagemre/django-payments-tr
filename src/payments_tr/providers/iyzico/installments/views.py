@@ -286,12 +286,10 @@ class BestInstallmentOptionsView(LoginRequiredMixin, View):
                 )
                 options_data.append(option_dict)
 
-            return JsonResponse(
-                {
-                    "success": True,
-                    "options": options_data,
-                }
-            )
+            return JsonResponse({
+                "success": True,
+                "options": options_data,
+            })
 
         except Exception as e:
             logger.exception(f"Error in BestInstallmentOptionsView: {e}")
@@ -420,21 +418,17 @@ class ValidateInstallmentView(LoginRequiredMixin, View):
             )
 
             if option:
-                return JsonResponse(
-                    {
-                        "success": True,
-                        "valid": True,
-                        "option": option.to_dict(),
-                    }
-                )
+                return JsonResponse({
+                    "success": True,
+                    "valid": True,
+                    "option": option.to_dict(),
+                })
             else:
-                return JsonResponse(
-                    {
-                        "success": True,
-                        "valid": False,
-                        "message": "Installment option not available for this card",
-                    }
-                )
+                return JsonResponse({
+                    "success": True,
+                    "valid": False,
+                    "message": "Installment option not available for this card",
+                })
 
         except Exception as e:
             logger.exception(f"Error in ValidateInstallmentView: {e}")
@@ -520,11 +514,9 @@ try:
                 client = InstallmentClient()
                 bank_options = client.get_installment_info(bin_number, amount)
 
-                return Response(
-                    {
-                        "banks": [bank.to_dict() for bank in bank_options],
-                    }
-                )
+                return Response({
+                    "banks": [bank.to_dict() for bank in bank_options],
+                })
 
             except (IyzicoValidationException, IyzicoAPIException) as e:
                 return Response(
@@ -636,19 +628,15 @@ try:
                 option = client.validate_installment_option(bin_number, amount, installment_number)
 
                 if option:
-                    return Response(
-                        {
-                            "valid": True,
-                            "option": option.to_dict(),
-                        }
-                    )
+                    return Response({
+                        "valid": True,
+                        "option": option.to_dict(),
+                    })
                 else:
-                    return Response(
-                        {
-                            "valid": False,
-                            "message": "Installment option not available",
-                        }
-                    )
+                    return Response({
+                        "valid": False,
+                        "message": "Installment option not available",
+                    })
 
             except Exception as e:
                 logger.exception(f"Error validating installment: {e}")

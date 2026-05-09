@@ -44,13 +44,11 @@ class _FakePayment:
 
 class TestRefundResponsePaymentTransactionId:
     def test_property_present(self):
-        resp = RefundResponse(
-            {
-                "status": "success",
-                "paymentId": "order-pay-1",
-                "paymentTransactionId": "item-tx-1",
-            }
-        )
+        resp = RefundResponse({
+            "status": "success",
+            "paymentId": "order-pay-1",
+            "paymentTransactionId": "item-tx-1",
+        })
         # Both refund_id and payment_transaction_id resolve to the same
         # SDK key — we expose two names because callers reason about
         # them differently (refund_id = the refund record itself; payment_

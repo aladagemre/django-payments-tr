@@ -131,12 +131,10 @@ class Command(BaseCommand):
 
         # Add refunded status if not keeping them
         if not keep_refunded:
-            failed_statuses.extend(
-                [
-                    PaymentStatus.REFUNDED,
-                    PaymentStatus.REFUND_PENDING,
-                ]
-            )
+            failed_statuses.extend([
+                PaymentStatus.REFUNDED,
+                PaymentStatus.REFUND_PENDING,
+            ])
 
         old_failed = PaymentModel.objects.filter(
             created_at__lt=cutoff_date,
@@ -330,35 +328,31 @@ class Command(BaseCommand):
 
                 # Export failed payments
                 for payment in old_failed:
-                    writer.writerow(
-                        {
-                            "payment_id": payment.payment_id or "",
-                            "conversation_id": payment.conversation_id or "",
-                            "status": payment.status,
-                            "amount": str(payment.amount),
-                            "currency": payment.currency,
-                            "buyer_email": payment.buyer_email or "",
-                            "buyer_name": payment.get_buyer_full_name(),
-                            "created_at": payment.created_at.isoformat(),
-                            "updated_at": payment.updated_at.isoformat(),
-                        }
-                    )
+                    writer.writerow({
+                        "payment_id": payment.payment_id or "",
+                        "conversation_id": payment.conversation_id or "",
+                        "status": payment.status,
+                        "amount": str(payment.amount),
+                        "currency": payment.currency,
+                        "buyer_email": payment.buyer_email or "",
+                        "buyer_name": payment.get_buyer_full_name(),
+                        "created_at": payment.created_at.isoformat(),
+                        "updated_at": payment.updated_at.isoformat(),
+                    })
 
                 # Export successful payments
                 for payment in old_successful:
-                    writer.writerow(
-                        {
-                            "payment_id": payment.payment_id or "",
-                            "conversation_id": payment.conversation_id or "",
-                            "status": payment.status,
-                            "amount": str(payment.amount),
-                            "currency": payment.currency,
-                            "buyer_email": payment.buyer_email or "",
-                            "buyer_name": payment.get_buyer_full_name(),
-                            "created_at": payment.created_at.isoformat(),
-                            "updated_at": payment.updated_at.isoformat(),
-                        }
-                    )
+                    writer.writerow({
+                        "payment_id": payment.payment_id or "",
+                        "conversation_id": payment.conversation_id or "",
+                        "status": payment.status,
+                        "amount": str(payment.amount),
+                        "currency": payment.currency,
+                        "buyer_email": payment.buyer_email or "",
+                        "buyer_name": payment.get_buyer_full_name(),
+                        "created_at": payment.created_at.isoformat(),
+                        "updated_at": payment.updated_at.isoformat(),
+                    })
 
             total_count = old_failed.count() + old_successful.count()
             self.stdout.write(

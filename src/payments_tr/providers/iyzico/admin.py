@@ -700,53 +700,49 @@ class IyzicoPaymentAdminMixin:
         writer = csv.writer(response)
 
         # Write header
-        writer.writerow(
-            [
-                "Payment ID",
-                "Conversation ID",
-                "Status",
-                "Amount",
-                "Paid Amount",
-                "Currency",
-                "Installment",
-                "Buyer Email",
-                "Buyer Name",
-                "Buyer Surname",
-                "Card Last 4",
-                "Card Association",
-                "Card Type",
-                "Card Bank",
-                "Error Code",
-                "Error Message",
-                "Created At",
-                "Updated At",
-            ]
-        )
+        writer.writerow([
+            "Payment ID",
+            "Conversation ID",
+            "Status",
+            "Amount",
+            "Paid Amount",
+            "Currency",
+            "Installment",
+            "Buyer Email",
+            "Buyer Name",
+            "Buyer Surname",
+            "Card Last 4",
+            "Card Association",
+            "Card Type",
+            "Card Bank",
+            "Error Code",
+            "Error Message",
+            "Created At",
+            "Updated At",
+        ])
 
         # Write data with CSV injection protection
         for payment in queryset:
-            writer.writerow(
-                [
-                    self._sanitize_csv_field(payment.payment_id),
-                    self._sanitize_csv_field(payment.conversation_id),
-                    self._sanitize_csv_field(payment.get_status_display()),
-                    str(payment.amount),
-                    str(payment.paid_amount) if payment.paid_amount else "",
-                    self._sanitize_csv_field(payment.currency),
-                    payment.installment,
-                    self._sanitize_csv_field(payment.buyer_email),
-                    self._sanitize_csv_field(payment.buyer_name),
-                    self._sanitize_csv_field(payment.buyer_surname),
-                    self._sanitize_csv_field(payment.card_last_four_digits),
-                    self._sanitize_csv_field(payment.card_association),
-                    self._sanitize_csv_field(payment.card_type),
-                    self._sanitize_csv_field(payment.card_bank_name),
-                    self._sanitize_csv_field(payment.error_code),
-                    self._sanitize_csv_field(payment.error_message),
-                    payment.created_at.isoformat() if payment.created_at else "",
-                    payment.updated_at.isoformat() if payment.updated_at else "",
-                ]
-            )
+            writer.writerow([
+                self._sanitize_csv_field(payment.payment_id),
+                self._sanitize_csv_field(payment.conversation_id),
+                self._sanitize_csv_field(payment.get_status_display()),
+                str(payment.amount),
+                str(payment.paid_amount) if payment.paid_amount else "",
+                self._sanitize_csv_field(payment.currency),
+                payment.installment,
+                self._sanitize_csv_field(payment.buyer_email),
+                self._sanitize_csv_field(payment.buyer_name),
+                self._sanitize_csv_field(payment.buyer_surname),
+                self._sanitize_csv_field(payment.card_last_four_digits),
+                self._sanitize_csv_field(payment.card_association),
+                self._sanitize_csv_field(payment.card_type),
+                self._sanitize_csv_field(payment.card_bank_name),
+                self._sanitize_csv_field(payment.error_code),
+                self._sanitize_csv_field(payment.error_message),
+                payment.created_at.isoformat() if payment.created_at else "",
+                payment.updated_at.isoformat() if payment.updated_at else "",
+            ])
 
         self.message_user(
             request, f"Exported {queryset.count()} payment(s) to CSV.", level="success"

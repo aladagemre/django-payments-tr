@@ -174,14 +174,12 @@ class EFTPaymentAdminMixin:
     ) -> tuple[str, ...]:
         """Make approval fields read-only."""
         readonly = list(super().get_readonly_fields(request, obj))  # type: ignore
-        readonly.extend(
-            [
-                "approved_by",
-                "approved_at",
-                "rejected_by",
-                "rejected_at",
-            ]
-        )
+        readonly.extend([
+            "approved_by",
+            "approved_at",
+            "rejected_by",
+            "rejected_at",
+        ])
         return tuple(readonly)
 
 

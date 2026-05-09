@@ -295,11 +295,9 @@ class TestCurrencyConverter:
         converter = CurrencyConverter()
         new_rate = Decimal("0.035")
 
-        converter.update_rates(
-            {
-                "USD": new_rate,
-            }
-        )
+        converter.update_rates({
+            "USD": new_rate,
+        })
 
         assert converter.rates[Currency.USD] == new_rate
 
