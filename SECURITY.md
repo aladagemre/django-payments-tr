@@ -341,6 +341,31 @@ python manage.py cleanup_old_payments \
 - [ ] Database backups are encrypted at rest
 - [ ] Error monitoring is configured (Sentry, etc.)
 - [ ] Security headers are set (CSP, HSTS, X-Frame-Options)
+- [ ] `IYZICO_CONNECTION_TIMEOUT` is set to a sensible value (default 30s)
+
+### Outbound HTTPS timeout
+
+The bundled `iyzipay` SDK constructs `http.client.HTTPSConnection` with
+no explicit `timeout=`, which means a slow or hung Iyzico endpoint can
+block a Celery / gunicorn worker thread until the kernel-level TCP
+timeout (often several minutes). That is a real DoS amplification
+vector — one upstream incident can cascade into worker exhaustion.
+
+`payments_tr.providers.iyzico.client` patches
+`iyzipay.IyzipayResource.connect` at module import to inject a
+configurable timeout. The default is **30 seconds** (long enough for
+the slowest legitimate Iyzico response, short enough to fail-fast on
+hangs). Override per project via:
+
+```python
+# settings.py
+IYZICO_CONNECTION_TIMEOUT = 15.0  # seconds
+```
+
+We deliberately patch the SDK rather than calling
+`socket.setdefaulttimeout()`, because the latter would change the
+timeout of *every* socket in the Python process (Postgres, Redis,
+internal RPC, etc.) — a side-effect far broader than the fix needs.
 
 ```python
 # settings.py — security headers

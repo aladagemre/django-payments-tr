@@ -7,11 +7,13 @@ handling configuration, error translation, and response normalization.
 
 from __future__ import annotations
 
+import json
 import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import iyzipay
+import iyzipay.iyzipay_resource as _iyzipay_resource
 
 from .exceptions import CardError, PaymentError, ThreeDSecureError, ValidationError
 from .settings import iyzico_settings
@@ -27,6 +29,57 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Outbound HTTPS timeout patch for the iyzipay SDK.
+#
+# ``iyzipay.iyzipay_resource.IyzipayResource.connect`` (SDK v1.0.45) builds
+# ``http.client.HTTPSConnection(options['base_url'])`` with no explicit
+# timeout. ``HTTPSConnection`` then defaults ``timeout`` to ``None``, which
+# means socket operations block forever until the kernel-level TCP timeout
+# (often minutes). A single slow / hung Iyzico endpoint can pin a Celery
+# or gunicorn worker thread for an unbounded amount of time, which is a
+# real DoS amplification risk.
+#
+# We monkey-patch the SDK rather than calling ``socket.setdefaulttimeout()``
+# because the latter changes the timeout for *every* socket in the Python
+# process (psycopg, redis, kombu, internal RPC, etc.) — far too broad.
+# Patching ``IyzipayResource.connect`` localises the change to outbound
+# Iyzico HTTPS calls only.
+#
+# The wrapper reads ``iyzico_settings.connection_timeout`` lazily on each
+# call so test-time ``override_settings`` works without re-importing this
+# module.
+# ---------------------------------------------------------------------------
+
+_ORIGINAL_IYZIPAY_CONNECT = _iyzipay_resource.IyzipayResource.connect
+
+
+def _iyzipay_connect_with_timeout(
+    self: _iyzipay_resource.IyzipayResource,
+    method: str,
+    url: str,
+    options: dict[str, Any],
+    request_body_dict: dict[str, Any] | None = None,
+    pki: Any = None,
+) -> Any:
+    """Replacement for ``IyzipayResource.connect`` that honours a timeout.
+
+    Mirrors the upstream signature and behaviour byte-for-byte except that
+    the underlying ``HTTPSConnection`` is constructed with an explicit
+    ``timeout=`` so a hung Iyzico endpoint cannot block a worker thread
+    indefinitely.
+    """
+    timeout = iyzico_settings.connection_timeout
+    connection = self.httplib.HTTPSConnection(options["base_url"], timeout=timeout)
+    body_str = json.dumps(request_body_dict)
+    header = self.get_http_header(url, options, body_str, pki)
+    connection.request(method, url, body_str, header)
+    return connection.getresponse()
+
+
+_iyzipay_resource.IyzipayResource.connect = _iyzipay_connect_with_timeout
 
 
 def _to_decimal(value: Any, *, field: str, item_index: int | None = None) -> Decimal:

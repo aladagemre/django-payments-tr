@@ -153,6 +153,28 @@ class IyzicoSettings:
         return get_setting("STRICT_IP_VALIDATION", default=True)
 
     @property
+    def connection_timeout(self) -> float:
+        """
+        Outbound HTTPS timeout (seconds) for calls into the iyzipay SDK.
+
+        The bundled ``iyzipay`` SDK constructs ``http.client.HTTPSConnection``
+        with no explicit timeout, which means a slow Iyzico endpoint will
+        block the calling worker thread until the OS-level TCP timeout
+        (often several minutes). That's a real DoS amplification risk: a
+        single hung Iyzico call can pin a Celery / gunicorn worker.
+
+        We monkey-patch ``iyzipay.IyzipayResource.connect`` at module
+        import (see ``client.py``) to pass this value into the underlying
+        ``HTTPSConnection``. Defaults to 30s — long enough for the slowest
+        legitimate Iyzico response, short enough to fail-fast on hangs.
+
+        Override per project::
+
+            IYZICO_CONNECTION_TIMEOUT = 15.0
+        """
+        return float(get_setting("CONNECTION_TIMEOUT", default=30.0))
+
+    @property
     def default_ip(self) -> str:
         """
         Default IP address to use when strict validation is disabled.
