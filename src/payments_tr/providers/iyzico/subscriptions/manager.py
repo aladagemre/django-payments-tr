@@ -471,7 +471,13 @@ class SubscriptionManager:
         return payment
 
     def _handle_successful_payment(self, subscription: Subscription) -> None:
-        """Handle successful payment - update subscription status and dates."""
+        """Handle successful payment - update subscription status and dates.
+
+        Uses ``save(update_fields=...)`` to avoid stomping on sibling columns
+        (e.g. ``last_payment_attempt`` set by the caller's atomic block, or
+        any column written by a concurrent webhook handler for the same
+        subscription).
+        """
         # Move to next billing period
         billing_interval_days = subscription.plan.get_billing_interval_days()
         subscription.current_period_start = subscription.current_period_end
@@ -485,7 +491,17 @@ class SubscriptionManager:
         subscription.failed_payment_count = 0
         subscription.last_payment_error = None
 
-        subscription.save()
+        subscription.save(
+            update_fields=[
+                "current_period_start",
+                "current_period_end",
+                "next_billing_date",
+                "status",
+                "failed_payment_count",
+                "last_payment_error",
+                "updated_at",
+            ]
+        )
 
         logger.info(f"Subscription {subscription.id} renewed successfully")
 
@@ -502,11 +518,23 @@ class SubscriptionManager:
         subscription: Subscription,
         error_message: str | None,
     ) -> None:
-        """Handle failed payment - update subscription status."""
+        """Handle failed payment - update subscription status.
+
+        Uses ``save(update_fields=...)`` so that concurrent webhook delivery
+        (or the caller's own ``last_payment_attempt`` write) cannot be
+        clobbered by a full-row UPDATE from this helper.
+        """
         subscription.failed_payment_count += 1
         subscription.last_payment_error = error_message
         subscription.status = SubscriptionStatus.PAST_DUE
-        subscription.save()
+        subscription.save(
+            update_fields=[
+                "failed_payment_count",
+                "last_payment_error",
+                "status",
+                "updated_at",
+            ]
+        )
 
         logger.warning(
             f"Subscription {subscription.id} payment failed "
@@ -558,13 +586,28 @@ class SubscriptionManager:
         if at_period_end:
             # Cancel at end of period
             subscription.cancel_at_period_end = True
-            subscription.save()
+            subscription.save(
+                update_fields=[
+                    "cancelled_at",
+                    "cancellation_reason",
+                    "cancel_at_period_end",
+                    "updated_at",
+                ]
+            )
             logger.info(f"Subscription {subscription.id} marked for cancellation at period end")
         else:
             # Cancel immediately
             subscription.status = SubscriptionStatus.CANCELLED
             subscription.ended_at = timezone.now()
-            subscription.save()
+            subscription.save(
+                update_fields=[
+                    "cancelled_at",
+                    "cancellation_reason",
+                    "status",
+                    "ended_at",
+                    "updated_at",
+                ]
+            )
             logger.info(f"Subscription {subscription.id} cancelled immediately")
 
         # Send signal
@@ -595,7 +638,7 @@ class SubscriptionManager:
             )
 
         subscription.status = SubscriptionStatus.PAUSED
-        subscription.save()
+        subscription.save(update_fields=["status", "updated_at"])
 
         logger.info(f"Subscription {subscription.id} paused")
 
@@ -626,7 +669,7 @@ class SubscriptionManager:
             )
 
         subscription.status = SubscriptionStatus.ACTIVE
-        subscription.save()
+        subscription.save(update_fields=["status", "updated_at"])
 
         logger.info(f"Subscription {subscription.id} resumed")
 
@@ -693,7 +736,7 @@ class SubscriptionManager:
                 f"{prorated_charge} {new_plan.currency}"
             )
 
-        subscription.save()
+        subscription.save(update_fields=["plan", "updated_at"])
 
         logger.info(
             f"Subscription {subscription.id} upgraded from {old_plan.name} to {new_plan.name}"
@@ -738,7 +781,7 @@ class SubscriptionManager:
                 "new_plan_id": new_plan.id,
                 "scheduled_at": timezone.now().isoformat(),
             }
-            subscription.save()
+            subscription.save(update_fields=["metadata", "updated_at"])
 
             logger.info(
                 f"Subscription {subscription.id} scheduled for downgrade to "
@@ -748,7 +791,7 @@ class SubscriptionManager:
             # Apply immediately
             subscription.plan = new_plan
             # TODO: Calculate and process refund for unused time
-            subscription.save()
+            subscription.save(update_fields=["plan", "updated_at"])
 
             logger.info(
                 f"Subscription {subscription.id} downgraded immediately from "

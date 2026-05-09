@@ -950,6 +950,81 @@ class TestSubscriptionManagerPaymentCreation:
         assert subscription.last_payment_attempt is not None
 
 
+class TestSubscriptionManagerPartialUpdates:
+    """Regression tests for ``save(update_fields=...)`` race protection.
+
+    Concurrent webhook delivery for the same subscription used to
+    field-stomp because ``_handle_failed_payment`` and
+    ``_handle_successful_payment`` did a full-row ``subscription.save()``.
+    These tests assert that sibling fields written by another writer are
+    preserved when the helper saves.
+    """
+
+    @pytest.fixture
+    def subscription(self, user, plan):
+        now = timezone.now()
+        return Subscription.objects.create(
+            user=user,
+            plan=plan,
+            status=SubscriptionStatus.ACTIVE,
+            start_date=now,
+            current_period_start=now,
+            current_period_end=now + timedelta(days=30),
+            next_billing_date=now + timedelta(days=30),
+        )
+
+    def test_handle_failed_payment_preserves_sibling_writes(self, subscription):
+        """Simulate a concurrent writer that updates ``last_payment_attempt``
+        between when the helper loads its in-memory copy and when it saves.
+        With ``update_fields`` listing only the columns the helper mutates,
+        the sibling write must survive.
+        """
+        manager = SubscriptionManager()
+
+        # Stale in-memory copy held by the helper's caller.
+        stale = Subscription.objects.get(pk=subscription.pk)
+
+        # A concurrent transaction writes a sibling column and commits.
+        sibling_ts = timezone.now() + timedelta(seconds=42)
+        Subscription.objects.filter(pk=subscription.pk).update(
+            last_payment_attempt=sibling_ts
+        )
+
+        # The helper saves on the stale instance. With update_fields it must
+        # only touch failed_payment_count / last_payment_error / status, so
+        # the sibling write is preserved.
+        manager._handle_failed_payment(stale, error_message="boom")
+
+        fresh = Subscription.objects.get(pk=subscription.pk)
+        assert fresh.last_payment_attempt is not None
+        # Compare to the second precision; the DB roundtrip can drop sub-ms.
+        assert abs((fresh.last_payment_attempt - sibling_ts).total_seconds()) < 1
+        assert fresh.failed_payment_count == 1
+        assert fresh.last_payment_error == "boom"
+        assert fresh.status == SubscriptionStatus.PAST_DUE
+
+    def test_handle_successful_payment_preserves_sibling_writes(self, subscription):
+        """Same race, success path. The helper rotates the billing window
+        and resets failure counters, but must not clobber a sibling write
+        to ``last_payment_attempt``.
+        """
+        manager = SubscriptionManager()
+        stale = Subscription.objects.get(pk=subscription.pk)
+
+        sibling_ts = timezone.now() + timedelta(seconds=42)
+        Subscription.objects.filter(pk=subscription.pk).update(
+            last_payment_attempt=sibling_ts,
+        )
+
+        manager._handle_successful_payment(stale)
+
+        fresh = Subscription.objects.get(pk=subscription.pk)
+        assert fresh.last_payment_attempt is not None
+        assert abs((fresh.last_payment_attempt - sibling_ts).total_seconds()) < 1
+        assert fresh.status == SubscriptionStatus.ACTIVE
+        assert fresh.failed_payment_count == 0
+
+
 class TestSubscriptionManagerTokenPayment:
     """Tests for token-based payment (stored cards)."""
 
