@@ -361,7 +361,9 @@ class IyzicoPaymentAdminMixin:
         from django.utils.html import escape
 
         if not hasattr(obj, "has_installment") or not obj.has_installment():
-            return mark_safe('<p style="color: #666;">No installment applied - single payment</p>')
+            return mark_safe(  # nosec B308 - static literal, no interpolation
+                '<p style="color: #666;">No installment applied - single payment</p>'
+            )
 
         # Get installment details if method is available
         if hasattr(obj, "get_installment_details"):
@@ -381,7 +383,9 @@ class IyzicoPaymentAdminMixin:
                 details["base_amount"] = obj.amount
 
         if not details:
-            return mark_safe('<p style="color: #666;">Installment details not available</p>')
+            return mark_safe(  # nosec B308 - static literal, no interpolation
+                '<p style="color: #666;">Installment details not available</p>'
+            )
 
         # Build HTML table with properly escaped values
         currency = escape(str(obj.currency)) if hasattr(obj, "currency") else "TRY"
@@ -494,7 +498,12 @@ class IyzicoPaymentAdminMixin:
                 )
                 html_parts.append("</p>")
 
-        return mark_safe("".join(html_parts))
+        # XSS audit: ``html_parts`` is built from static markup plus values
+        # from ``obj`` / ``details``; every dynamic value is run through
+        # ``django.utils.html.escape`` (or a hex-color literal chosen by an
+        # in-code conditional) before the f-string interpolation. No
+        # untrusted input reaches the rendered HTML.
+        return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
     get_installment_details_admin.short_description = _("Installment Details")
 
@@ -1012,7 +1021,9 @@ try:
                         currency = getattr(subscription.plan, "currency", "TRY") or "TRY"
 
             if total_payments == 0:
-                return mark_safe('<span style="color: #999;">No usage</span>')
+                return mark_safe(  # nosec B308 - static literal, no interpolation
+                    '<span style="color: #999;">No usage</span>'
+                )
 
             # Format amount with currency from subscription plan
             return format_html(
@@ -1194,7 +1205,13 @@ try:
 
             html_parts.append("</div>")  # Close main div
 
-            return mark_safe("".join(html_parts))
+            # XSS audit: every dynamic value pushed into ``html_parts`` above
+            # (``active_count``, ``success_count``, ``amount_str``,
+            # ``currency_str``, ``failed_count``, ``timesince_str``,
+            # ``date_str``, ``brand``, ``last_four``, ``month``, ``year``)
+            # is wrapped with ``django.utils.html.escape``. ``failure_color``
+            # is a hex literal chosen inline. No untrusted input reaches HTML.
+            return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
         get_detailed_usage_stats.short_description = _("Usage Statistics")
 
@@ -1647,7 +1664,9 @@ try:
             payments = obj.payments.order_by("-created_at")[:10]
 
             if not payments:
-                return mark_safe("<p>No payments yet.</p>")
+                return mark_safe(  # nosec B308 - static literal, no interpolation
+                    "<p>No payments yet.</p>"
+                )
 
             html_parts = []
             html_parts.append('<table style="width: 100%; border-collapse: collapse;">')
@@ -1680,7 +1699,12 @@ try:
                     f'<p style="margin-top: 10px;"><em>Showing 10 of {count} payments</em></p>'
                 )
 
-            return mark_safe("".join(html_parts))
+            # XSS audit: ``date_str``, ``amount_str`` (composed of two
+            # escape()-d halves), ``payment.get_status_display()``,
+            # ``payment.attempt_number`` and the trailing ``count`` are all
+            # passed through ``django.utils.html.escape`` before the
+            # f-string interpolation. No untrusted input reaches HTML.
+            return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
         get_payment_history.short_description = _("Recent Payments")
 

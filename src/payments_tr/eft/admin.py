@@ -84,20 +84,27 @@ class EFTPaymentAdminMixin:
 
     @admin.display(description="EFT Status")
     def eft_status_display(self, obj: Any) -> str:
-        """Display EFT status with color coding."""
+        """Display EFT status with color coding.
+
+        XSS audit: every ``mark_safe`` call below wraps a static string
+        literal with no interpolation. No untrusted input reaches the
+        HTML, so Bandit B308 is a false positive here.
+        """
         if hasattr(obj, "is_eft_approved") and obj.is_eft_approved:
-            return mark_safe(
+            return mark_safe(  # nosec B308 - static literal, no interpolation
                 '<span style="color: #28a745; font-weight: bold;">&#x2713; Approved</span>'
             )
         elif hasattr(obj, "is_eft_rejected") and obj.is_eft_rejected:
-            return mark_safe(
+            return mark_safe(  # nosec B308 - static literal, no interpolation
                 '<span style="color: #dc3545; font-weight: bold;">&#x2717; Rejected</span>'
             )
         elif hasattr(obj, "eft_reference_number") and obj.eft_reference_number:
-            return mark_safe(
+            return mark_safe(  # nosec B308 - static literal, no interpolation
                 '<span style="color: #ffc107; font-weight: bold;">&#x23F3; Pending</span>'
             )
-        return mark_safe('<span style="color: #6c757d;">N/A</span>')
+        return mark_safe(  # nosec B308 - static literal, no interpolation
+            '<span style="color: #6c757d;">N/A</span>'
+        )
 
     @admin.action(description="Approve selected EFT payments")
     def approve_eft_payments(
