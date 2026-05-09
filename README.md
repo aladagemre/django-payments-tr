@@ -551,6 +551,100 @@ STRIPE_PUBLISHABLE_KEY = "pk_..."
 STRIPE_WEBHOOK_SECRET = "whsec_..."
 ```
 
+## Data Processing & Sub-processors
+
+This section documents which personal data leaves your application when
+you use `django-payments-tr`, where it goes, and under what legal
+transfer mechanism. Downstream integrators **must** reflect these flows
+in their own RoPA (Records of Processing Activities under GDPR Art. 30
+/ KVKK Art. 16) and Privacy Notices. This is informational — it does
+not constitute legal advice.
+
+### Sub-processor: Iyzico (Türkiye)
+
+**Operating entity:** Iyzi Ödeme ve Elektronik Para Hizmetleri A.Ş.
+(BDDK-licensed payment institution, registered in Türkiye).
+
+**Data sent on every payment / checkout-form call:**
+
+- Buyer email
+- Buyer first name + last name
+- Buyer phone (`gsmNumber`) when available
+- Buyer Turkish identity number (TCKN) — **mandatory** for Turkish
+  cardholder transactions
+- Buyer registration address, city, country
+- Buyer IP address (subject to `IYZICO_STRICT_IP_VALIDATION`)
+- Order amount, currency, basket items (id, name, category, price)
+- For marketplace flows: sub-merchant key + per-item revenue split
+
+**Data sent on sub-merchant onboarding (marketplace mode only):**
+
+- Seller IBAN (validated client-side via `validate_iban_tr`)
+- Seller TCKN for `PERSONAL` type, or VKN + tax office +
+  legal company title for `PRIVATE_COMPANY` /
+  `LIMITED_OR_JOINT_STOCK_COMPANY` types
+
+**Transfer mechanism:** Türkiye does not have an EU adequacy decision
+under GDPR Art. 45. EU-based controllers must rely on Standard
+Contractual Clauses (Art. 46) plus a Transfer Impact Assessment.
+Iyzico's data-processing addendum is available on request from Iyzico
+directly. KVKK-only deployments do not need an SCC because data stays
+within Türkiye.
+
+### Sub-processor: Stripe
+
+**Operating entity:** Stripe Payments Europe Ltd. (Ireland) for EU
+customers; Stripe, Inc. (US) for global customers. Routing depends on
+your Stripe account configuration.
+
+**Data sent on every payment:**
+
+- Buyer email
+- Order amount, currency, payment metadata you supply
+- Card data — collected client-side via Stripe.js / Stripe Elements
+  and tokenised before it ever touches your server. The host
+  application **never sees the PAN**, expiry, or CVV.
+
+**Transfer mechanism:** Stripe's standard DPA (covers SCCs for
+EU→US transfers via Stripe, Inc.). Available at
+`https://stripe.com/legal/dpa`.
+
+### What stays in your database
+
+The library writes to your tables (not Iyzico's / Stripe's) the
+following payment-related fields. These are under your sole controllership:
+
+- Provider name, provider transaction id, idempotency key
+- Amount, currency, status (pending / success / failed / refunded)
+- Buyer email and a hash / reference to the buyer user
+- Webhook event records (for replay protection — see `WebhookEvent`
+  in `SECURITY.md`)
+- For EFT: bank reference, approval audit trail
+- For marketplace: sub-merchant external id and key (no IBAN / TCKN
+  unless your seller model opts in via `AbstractSubMerchantOwner`)
+
+We do **not** store: full card numbers, CVV, magnetic-stripe data, or
+any data that would put your application in PCI DSS scope. The
+`PaymentMethod` model intentionally stores only Iyzico's tokenised
+references (`card_token`, `card_user_key`, last 4 digits, expiry).
+
+### Log retention
+
+Payment records contain identifiers and email addresses, which are
+personal data under GDPR / KVKK. Old records must be purged on a
+defined schedule. Use the bundled management command:
+
+```bash
+# Keep successful payments for 7 years (TR commercial-code retention),
+# purge failures after 90 days. Schedule via cron / Celery beat.
+python manage.py cleanup_old_payments \
+    --keep-successful 2555 \
+    --keep-failed 90
+```
+
+See `SECURITY.md` → "Data retention" for the full rationale and
+jurisdiction-specific values.
+
 ## Development
 
 ```bash
