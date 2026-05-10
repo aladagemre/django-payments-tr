@@ -5,28 +5,37 @@ Optional module - only available if DRF is installed.
 Provides viewsets for exposing payment data through REST APIs.
 """
 
+from typing import Any
+
 try:
-    from rest_framework import filters, permissions, status, viewsets
-    from rest_framework.decorators import action
-    from rest_framework.response import Response
+    from rest_framework import (  # type: ignore[import-untyped]
+        filters,
+        permissions,
+        status,
+        viewsets,
+    )
+    from rest_framework.decorators import action  # type: ignore[import-untyped]
+    from rest_framework.response import Response  # type: ignore[import-untyped]
 
     HAS_DRF = True
 except ImportError:
     HAS_DRF = False
 
     # Create dummy classes
-    class viewsets:  # type: ignore
+    class viewsets:  # type: ignore[no-redef]
         class ReadOnlyModelViewSet:
             pass
 
 
 try:
-    from django_filters.rest_framework import DjangoFilterBackend
+    from django_filters.rest_framework import (  # type: ignore[import-untyped]
+        DjangoFilterBackend,
+    )
 
     HAS_DJANGO_FILTERS = True
 except ImportError:
     HAS_DJANGO_FILTERS = False
-    DjangoFilterBackend = None  # type: ignore
+    DjangoFilterBackend = None
 
 
 if HAS_DRF:
@@ -41,7 +50,7 @@ if HAS_DRF:
     )
     from .utils import get_client_ip
 
-    class IyzicoPaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    class IyzicoPaymentViewSet(viewsets.ReadOnlyModelViewSet):  # type: ignore[misc]
         """
         Read-only viewset for payment transactions.
 
@@ -86,7 +95,7 @@ if HAS_DRF:
         ordering_fields = ["created_at", "amount", "paid_amount", "updated_at"]
         ordering = ["-created_at"]
 
-        def get_queryset(self):
+        def get_queryset(self) -> Any:
             """
             Get queryset for this viewset.
 
@@ -99,7 +108,7 @@ if HAS_DRF:
                 )
             return self.queryset
 
-        def filter_queryset(self, queryset):
+        def filter_queryset(self, queryset: Any) -> Any:
             """Apply additional filters."""
             queryset = super().filter_queryset(queryset)
 
@@ -125,8 +134,8 @@ if HAS_DRF:
 
             return queryset
 
-        @action(detail=False, methods=["get"])
-        def successful(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def successful(self, request: Any) -> Any:
             """
             List only successful payments.
 
@@ -141,8 +150,8 @@ if HAS_DRF:
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
 
-        @action(detail=False, methods=["get"])
-        def failed(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def failed(self, request: Any) -> Any:
             """
             List only failed payments.
 
@@ -157,8 +166,8 @@ if HAS_DRF:
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
 
-        @action(detail=False, methods=["get"])
-        def pending(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def pending(self, request: Any) -> Any:
             """
             List only pending payments.
 
@@ -173,8 +182,8 @@ if HAS_DRF:
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
 
-        @action(detail=False, methods=["get"])
-        def stats(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def stats(self, request: Any) -> Any:
             """
             Get payment statistics.
 
@@ -213,7 +222,7 @@ if HAS_DRF:
 
             return Response(stats)
 
-    class IyzicoPaymentManagementViewSet(viewsets.ReadOnlyModelViewSet):
+    class IyzicoPaymentManagementViewSet(viewsets.ReadOnlyModelViewSet):  # type: ignore[misc]
         """
         Extended viewset with refund management capabilities.
 
@@ -235,7 +244,7 @@ if HAS_DRF:
         ordering_fields = IyzicoPaymentViewSet.ordering_fields
         ordering = IyzicoPaymentViewSet.ordering
 
-        def get_queryset(self):
+        def get_queryset(self) -> Any:
             """Get queryset - must be overridden."""
             if not hasattr(self, "queryset") or self.queryset is None:
                 raise NotImplementedError(
@@ -243,8 +252,8 @@ if HAS_DRF:
                 )
             return self.queryset
 
-        @action(detail=True, methods=["post"])
-        def refund(self, request, pk=None):
+        @action(detail=True, methods=["post"])  # type: ignore[untyped-decorator]
+        def refund(self, request: Any, pk: Any = None) -> Any:
             """
             Process refund for a payment.
 
@@ -329,7 +338,7 @@ if HAS_DRF:
 
 else:
     # Provide helpful error messages if DRF is not installed
-    def __getattr__(name):
+    def __getattr__(name: str) -> Any:
         """Raise helpful error when trying to use DRF viewsets without DRF."""
         raise ImportError(
             f"Cannot use {name} because Django REST Framework is not installed. "

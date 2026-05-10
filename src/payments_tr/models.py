@@ -9,6 +9,8 @@ Architecture:
         └── Provider-specific extensions (e.g., AbstractIyzicoPayment in django-iyzico)
 """
 
+from typing import Any
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -40,38 +42,38 @@ class PaymentProviderChoices(models.TextChoices):
     OTHER = "other", _("Other")
 
 
-class PaymentQuerySet(models.QuerySet):
+class PaymentQuerySet(models.QuerySet[Any]):
     """Custom QuerySet for payments (provider-agnostic)."""
 
-    def successful(self):
+    def successful(self) -> "PaymentQuerySet":
         """Filter successful payments."""
         return self.filter(status=PaymentStatus.SUCCESS)
 
-    def failed(self):
+    def failed(self) -> "PaymentQuerySet":
         """Filter failed payments."""
         return self.filter(status=PaymentStatus.FAILED)
 
-    def pending(self):
+    def pending(self) -> "PaymentQuerySet":
         """Filter pending payments."""
         return self.filter(status=PaymentStatus.PENDING)
 
-    def by_provider(self, provider: str):
+    def by_provider(self, provider: str) -> "PaymentQuerySet":
         """Filter by payment provider."""
         return self.filter(provider=provider)
 
-    def by_provider_payment_id(self, provider_payment_id: str):
+    def by_provider_payment_id(self, provider_payment_id: str) -> "PaymentQuerySet":
         """Get payment by provider payment ID."""
         return self.filter(provider_payment_id=provider_payment_id)
 
 
-class PaymentManager(models.Manager):
+class PaymentManager(models.Manager[Any]):
     """Custom manager for payments (provider-agnostic)."""
 
-    def get_queryset(self):
+    def get_queryset(self) -> PaymentQuerySet:
         """Return custom QuerySet."""
         return PaymentQuerySet(self.model, using=self._db)
 
-    def get_by_provider_payment_id(self, provider_payment_id: str):
+    def get_by_provider_payment_id(self, provider_payment_id: str) -> Any:
         """
         Get payment by provider payment ID.
 
@@ -86,19 +88,19 @@ class PaymentManager(models.Manager):
         """
         return self.get(provider_payment_id=provider_payment_id)
 
-    def successful(self):
+    def successful(self) -> PaymentQuerySet:
         """Get all successful payments."""
         return self.get_queryset().successful()
 
-    def failed(self):
+    def failed(self) -> PaymentQuerySet:
         """Get all failed payments."""
         return self.get_queryset().failed()
 
-    def pending(self):
+    def pending(self) -> PaymentQuerySet:
         """Get all pending payments."""
         return self.get_queryset().pending()
 
-    def by_provider(self, provider: str):
+    def by_provider(self, provider: str) -> PaymentQuerySet:
         """Get payments by provider."""
         return self.get_queryset().by_provider(provider)
 

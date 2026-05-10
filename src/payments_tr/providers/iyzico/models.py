@@ -10,7 +10,7 @@ Architecture:
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -51,15 +51,15 @@ PaymentProvider = PaymentProviderChoices
 class IyzicoPaymentQuerySet(PaymentQuerySet):
     """Custom QuerySet for Iyzico payments."""
 
-    def by_payment_id(self, payment_id: str):
+    def by_payment_id(self, payment_id: str) -> "IyzicoPaymentQuerySet":
         """Get payment by Iyzico payment ID (alias for provider_payment_id)."""
         return self.filter(provider_payment_id=payment_id)
 
-    def by_conversation_id(self, conversation_id: str):
+    def by_conversation_id(self, conversation_id: str) -> "IyzicoPaymentQuerySet":
         """Get payments by conversation ID."""
         return self.filter(conversation_id=conversation_id)
 
-    def by_token(self, token: str):
+    def by_token(self, token: str) -> "IyzicoPaymentQuerySet":
         """Get payment by checkout form token."""
         return self.filter(token=token)
 
@@ -67,11 +67,11 @@ class IyzicoPaymentQuerySet(PaymentQuerySet):
 class IyzicoPaymentManager(PaymentManager):
     """Custom manager for Iyzico payments."""
 
-    def get_queryset(self):
+    def get_queryset(self) -> IyzicoPaymentQuerySet:
         """Return custom QuerySet."""
         return IyzicoPaymentQuerySet(self.model, using=self._db)
 
-    def get_by_payment_id(self, payment_id: str):
+    def get_by_payment_id(self, payment_id: str) -> Any:
         """
         Get payment by Iyzico payment ID.
 
@@ -86,7 +86,7 @@ class IyzicoPaymentManager(PaymentManager):
         """
         return self.get(provider_payment_id=payment_id)
 
-    def get_by_conversation_id(self, conversation_id: str):
+    def get_by_conversation_id(self, conversation_id: str) -> Any:
         """
         Get payment by conversation ID.
 
@@ -98,7 +98,7 @@ class IyzicoPaymentManager(PaymentManager):
         """
         return self.filter(conversation_id=conversation_id).first()
 
-    def get_by_token(self, token: str):
+    def get_by_token(self, token: str) -> Any:
         """
         Get payment by checkout form token.
 
@@ -250,8 +250,9 @@ class AbstractIyzicoPayment(AbstractPayment):
         help_text=_("Iyzico error group (if payment failed)"),
     )
 
-    # Custom manager
-    objects = IyzicoPaymentManager()
+    # Custom manager.  ``ClassVar`` keeps mypy from flagging the override
+    # of ``AbstractPayment.objects`` as an instance-vs-class-var mismatch.
+    objects: ClassVar[IyzicoPaymentManager] = IyzicoPaymentManager()
 
     class Meta:
         abstract = True
@@ -272,7 +273,7 @@ class AbstractIyzicoPayment(AbstractPayment):
             f"iyzico Payment {self.provider_payment_id or 'pending'} - {self.get_status_display()}"
         )
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure provider is set to iyzico."""
         self.provider = PaymentProviderChoices.IYZICO
         super().save(*args, **kwargs)
@@ -285,7 +286,7 @@ class AbstractIyzicoPayment(AbstractPayment):
         return self.provider_payment_id
 
     @payment_id.setter
-    def payment_id(self, value: str):
+    def payment_id(self, value: str) -> None:
         """Set provider_payment_id via alias."""
         self.provider_payment_id = value
 
@@ -296,7 +297,7 @@ class AbstractIyzicoPayment(AbstractPayment):
         ip_address: str,
         amount: Decimal | None = None,
         reason: str | None = None,
-    ):
+    ) -> Any:
         """
         Process refund for this payment.
 
@@ -362,7 +363,7 @@ class AbstractIyzicoPayment(AbstractPayment):
 
         return response
 
-    def update_from_response(self, response, save: bool = True) -> None:
+    def update_from_response(self, response: Any, save: bool = True) -> None:
         """
         Update payment fields from Iyzico API response.
 
@@ -539,24 +540,25 @@ class AbstractIyzicoPayment(AbstractPayment):
 
         return get_currency_name(self.currency)
 
-    def convert_to_currency(self, target_currency: str, converter=None) -> Decimal:
+    def convert_to_currency(self, target_currency: str, converter: Any = None) -> Decimal:
         """Convert payment amount to another currency."""
         from .currency import CurrencyConverter
 
         if not converter:
             converter = CurrencyConverter()
 
-        return converter.convert(
+        result: Decimal = converter.convert(
             self.amount,
             self.currency,
             target_currency,
         )
+        return result
 
     def is_currency(self, currency_code: str) -> bool:
         """Check if payment is in specific currency."""
         return self.currency.upper() == currency_code.upper()
 
-    def get_amount_in_try(self, converter=None) -> Decimal:
+    def get_amount_in_try(self, converter: Any = None) -> Decimal:
         """Get payment amount in Turkish Lira (TRY)."""
         if self.is_currency("TRY"):
             return self.amount

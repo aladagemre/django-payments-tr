@@ -5,10 +5,12 @@ Handles subscription lifecycle, billing, upgrades/downgrades,
 and payment processing.
 """
 
+from __future__ import annotations
+
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -20,7 +22,14 @@ from ..exceptions import IyzicoAPIException, IyzicoValidationException
 from ..models import PaymentStatus
 from .models import Subscription, SubscriptionPayment, SubscriptionPlan, SubscriptionStatus
 
-User = get_user_model()
+if TYPE_CHECKING:
+    # ``AUTH_USER_MODEL`` is project-configurable so we can't pin a single
+    # concrete user class; ``Any`` matches the historical permissiveness
+    # of this code without forcing every caller to narrow.
+    User = Any
+else:
+    User = get_user_model()
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +65,7 @@ class SubscriptionManager:
         user: User,
         plan: SubscriptionPlan,
         payment_method: dict[str, Any],
-        start_date: timezone.datetime | None = None,
+        start_date: datetime | None = None,
         trial: bool = True,
         metadata: dict[str, Any] | None = None,
     ) -> Subscription:
@@ -468,6 +477,9 @@ class SubscriptionManager:
             f"(status={status}, attempt={attempt_number})"
         )
 
+        # ``objects.create`` is typed as ``Any`` by django-stubs; the actual
+        # runtime type is the model we just instantiated.
+        assert isinstance(payment, SubscriptionPayment)
         return payment
 
     def _handle_successful_payment(self, subscription: Subscription) -> None:
@@ -844,7 +856,9 @@ class SubscriptionManager:
             profile = user  # Use user model directly
 
         # Helper to get field from profile or user
-        def get_field(field_name: str, user_fallback: str = None, required: bool = False) -> str:
+        def get_field(
+            field_name: str, user_fallback: str | None = None, required: bool = False
+        ) -> str:
             # Try profile first, then user model
             value = getattr(profile, field_name, None)
             if not value and user_fallback:
