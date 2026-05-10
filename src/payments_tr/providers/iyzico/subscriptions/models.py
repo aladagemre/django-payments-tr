@@ -6,6 +6,7 @@ Requires Celery for automatic billing.
 """
 
 import logging
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -302,7 +303,7 @@ class PaymentMethod(models.Model):
             import calendar
 
             last_day = calendar.monthrange(year, month)[1]
-            expiry_date = timezone.datetime(year, month, last_day, 23, 59, 59, tzinfo=now.tzinfo)
+            expiry_date = datetime(year, month, last_day, 23, 59, 59, tzinfo=now.tzinfo)
 
             return expiry_date <= now + timedelta(days=within_days)
         except (ValueError, TypeError):
@@ -352,7 +353,7 @@ class PaymentMethod(models.Model):
         self.save(update_fields=["is_active", "is_default", "updated_at"])
 
     @classmethod
-    def get_default_for_user(cls, user) -> Optional["PaymentMethod"]:
+    def get_default_for_user(cls, user: Any) -> Optional["PaymentMethod"]:
         """
         Get the default active payment method for a user.
 
@@ -369,7 +370,7 @@ class PaymentMethod(models.Model):
         ).first()
 
     @classmethod
-    def get_active_for_user(cls, user) -> models.QuerySet:
+    def get_active_for_user(cls, user: Any) -> models.QuerySet["PaymentMethod"]:
         """
         Get all active payment methods for a user.
 
@@ -534,14 +535,17 @@ class SubscriptionPlan(models.Model):
         Returns:
             Number of days in one billing cycle.
         """
-        base_days = {
-            BillingInterval.DAILY: 1,
-            BillingInterval.WEEKLY: 7,
-            BillingInterval.MONTHLY: 30,  # Approximate
-            BillingInterval.QUARTERLY: 90,  # Approximate
-            BillingInterval.YEARLY: 365,  # Approximate
+        # ``BillingInterval`` is a ``TextChoices`` -> ``str``-subclass; the
+        # stored ``billing_interval`` field is a plain ``CharField`` (``str``).
+        base_days: dict[str, int] = {
+            BillingInterval.DAILY.value: 1,
+            BillingInterval.WEEKLY.value: 7,
+            BillingInterval.MONTHLY.value: 30,  # Approximate
+            BillingInterval.QUARTERLY.value: 90,  # Approximate
+            BillingInterval.YEARLY.value: 365,  # Approximate
         }
-        return base_days.get(self.billing_interval, 30) * self.billing_interval_count
+        days: int = base_days.get(self.billing_interval, 30)
+        return days * self.billing_interval_count
 
     def can_accept_subscribers(self) -> bool:
         """
@@ -696,7 +700,9 @@ class Subscription(models.Model):
         verbose_name = _("Subscription")
         verbose_name_plural = _("Subscriptions")
         constraints = [
-            models.CheckConstraint(
+            models.CheckConstraint(  # type: ignore[call-overload]
+                # Django 5.1 renamed ``check`` -> ``condition``; we resolve
+                # the name dynamically via ``CHECKCONSTRAINT_PARAM``.
                 **{
                     CHECKCONSTRAINT_PARAM: models.Q(
                         current_period_end__gte=models.F("current_period_start")

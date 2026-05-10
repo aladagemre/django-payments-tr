@@ -159,12 +159,12 @@ class RetryableOperation:
         self.current_attempt = 0
         self.last_exception: Exception | None = None
 
-    def __iter__(self):
+    def __iter__(self) -> RetryableOperation:
         """Iterate over retry attempts."""
         self.current_attempt = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> RetryAttempt:
         """Get next retry attempt."""
         if self.current_attempt >= self.config.max_attempts:
             if self.last_exception:
@@ -184,18 +184,26 @@ class RetryAttempt:
         self.operation = operation
         self.attempt_number = attempt_number
 
-    def __enter__(self):
+    def __enter__(self) -> RetryAttempt:
         """Enter retry attempt context."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
         """Exit retry attempt context."""
         if exc_type is None:
             # Success
             return True
 
-        # Store exception
-        self.operation.last_exception = exc_val
+        # Store exception. ``__exit__`` receives ``BaseException | None``
+        # but ``last_exception`` is typed as ``Exception | None`` -- the
+        # historic contract assumes only ``Exception`` subclasses reach
+        # this code path.
+        self.operation.last_exception = exc_val  # type: ignore[assignment]
 
         # Check if this was the last attempt
         if self.attempt_number >= self.operation.config.max_attempts - 1:
@@ -249,13 +257,18 @@ try:
         config = RetryConfig(max_attempts, initial_delay, max_delay, exponential_base, jitter)
 
         def decorator(func: Callable[..., T]) -> Callable[..., T]:
+            # ``func`` is conceptually ``Callable[..., Awaitable[T]]`` here
+            # but expressing that with a single ``T`` typevar is awkward;
+            # callers always decorate ``async def`` functions.
+            # TODO: refactor to split sync/async retry into separately
+            # typed factories once we drop Python 3.11 support.
             @functools.wraps(func)
             async def wrapper(*args: Any, **kwargs: Any) -> T:
                 last_exception = None
 
                 for attempt in range(config.max_attempts):
                     try:
-                        return await func(*args, **kwargs)
+                        return await func(*args, **kwargs)  # type: ignore[no-any-return, misc]
                     except exceptions as e:
                         last_exception = e
 
@@ -282,7 +295,7 @@ try:
                     raise last_exception
                 raise RuntimeError("Unexpected retry loop exit")
 
-            return wrapper
+            return wrapper  # type: ignore[return-value]
 
         return decorator
 

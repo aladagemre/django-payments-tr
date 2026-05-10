@@ -73,7 +73,7 @@ class MonitoringService:
     FAILURE_RATE_KEY = "iyzico_failure_rate"
     DOUBLE_BILLING_KEY = "iyzico_double_billing_attempts"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize monitoring service."""
         self.config = getattr(settings, "IYZICO_MONITORING", {})
         self.metrics_backend = self.config.get("METRICS_BACKEND", None)
@@ -92,7 +92,7 @@ class MonitoringService:
         amount: Decimal,
         currency: str,
         payment_type: str = "one_time",
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Log a payment attempt.
@@ -107,7 +107,7 @@ class MonitoringService:
         if not self.log_payments:
             return
 
-        log_data = {
+        log_data: dict[str, Any] = {
             "event": "payment_attempt",
             "user_id": str(user_id),
             "amount": str(amount),
@@ -133,7 +133,7 @@ class MonitoringService:
         amount: Decimal,
         currency: str,
         duration_ms: float | None = None,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Log a successful payment.
@@ -149,7 +149,7 @@ class MonitoringService:
         if not self.log_payments:
             return
 
-        log_data = {
+        log_data: dict[str, Any] = {
             "event": "payment_success",
             "payment_id": payment_id,
             "user_id": str(user_id),
@@ -178,7 +178,7 @@ class MonitoringService:
         amount: Decimal | None = None,
         currency: str | None = None,
         is_recoverable: bool = True,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Log a payment failure.
@@ -192,7 +192,7 @@ class MonitoringService:
             is_recoverable: Whether the error might be retryable.
             metadata: Additional context data.
         """
-        log_data = {
+        log_data: dict[str, Any] = {
             "event": "payment_failure",
             "user_id": str(user_id),
             "error_code": error_code,
@@ -448,7 +448,7 @@ class MonitoringService:
         alert_type: str,
         message: str,
         severity: str = "medium",
-        data: dict | None = None,
+        data: dict[str, Any] | None = None,
     ) -> None:
         """
         Send an alert through configured channels.
@@ -548,7 +548,9 @@ def get_monitoring_service() -> MonitoringService:
 
 
 # Decorator for timing function execution
-def monitor_timing(metric_name: str):
+def monitor_timing(
+    metric_name: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to monitor function execution time.
 
@@ -562,9 +564,9 @@ def monitor_timing(metric_name: str):
         ...     pass
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)

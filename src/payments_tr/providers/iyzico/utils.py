@@ -12,7 +12,7 @@ import logging
 import time
 import uuid
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 
 from .exceptions import ValidationError
 
@@ -131,10 +131,17 @@ def mask_card_data(payment_details: dict[str, Any]) -> dict[str, Any]:
         False
     """
     if not isinstance(payment_details, dict):
-        logger.warning("mask_card_data received non-dict input")
+        # Defensive: ``payment_details`` is typed as ``dict`` but historic
+        # callers (and the ``parse_iyzico_response`` deserialiser) can pass
+        # anything; keep the runtime guard.
+        logger.warning(  # type: ignore[unreachable]
+            "mask_card_data received non-dict input"
+        )
         return {}
 
-    safe_data = _mask_dict_recursive(payment_details)
+    # ``_mask_dict_recursive`` is typed as ``-> Any`` (it accepts any
+    # nested value); when the input is a dict it returns a dict.
+    safe_data: dict[str, Any] = _mask_dict_recursive(payment_details)
 
     # Handle the 'card' key specially
     if "card" in safe_data and isinstance(safe_data["card"], dict):
@@ -204,7 +211,7 @@ def _mask_dict_recursive(data: Any) -> Any:
         Masked data with sensitive fields replaced with '***REDACTED***'.
     """
     if isinstance(data, dict):
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in data.items():
             if key in SENSITIVE_CARD_FIELDS:
                 # Replace sensitive data
@@ -300,8 +307,12 @@ def validate_amount(
             error_code="INVALID_AMOUNT",
         )
 
-    # Validate decimal places (max 2 for most currencies)
-    if decimal_amount.as_tuple().exponent < -2:
+    # Validate decimal places (max 2 for most currencies).
+    # ``exponent`` is ``int`` for finite numbers and a literal ``"n"``,
+    # ``"N"`` or ``"F"`` for NaN / Infinity; we already guarded against
+    # those via ``Decimal(str(...))`` above (raises ``InvalidOperation``).
+    exponent = decimal_amount.as_tuple().exponent
+    if isinstance(exponent, int) and exponent < -2:
         raise ValidationError(
             "Amount cannot have more than 2 decimal places",
             error_code="INVALID_AMOUNT_PRECISION",
@@ -534,13 +545,13 @@ def parse_iyzico_response(raw_response: Any) -> dict[str, Any]:
         {'status': 'success'}
     """
     if isinstance(raw_response, dict):
-        return raw_response
+        return cast(dict[str, Any], raw_response)
 
     if isinstance(raw_response, bytes):
         import json
 
         try:
-            return json.loads(raw_response.decode("utf-8"))
+            return cast(dict[str, Any], json.loads(raw_response.decode("utf-8")))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Failed to parse bytes response: {e}")
             return {"error": "Failed to parse response", "status": "failure"}
@@ -549,7 +560,7 @@ def parse_iyzico_response(raw_response: Any) -> dict[str, Any]:
         import json
 
         try:
-            return json.loads(raw_response)
+            return cast(dict[str, Any], json.loads(raw_response))
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse string response: {e}")
             return {"error": "Failed to parse response", "status": "failure"}
@@ -580,7 +591,7 @@ def extract_card_info(payment_response: dict[str, Any]) -> dict[str, str]:
         'CREDIT_CARD'
     """
     if not isinstance(payment_response, dict):
-        return {}
+        return {}  # type: ignore[unreachable]
 
     return {
         "cardType": payment_response.get("cardType", ""),
@@ -749,7 +760,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
         are also identifying.
     """
     if not isinstance(data, dict):
-        return {}
+        return {}  # type: ignore[unreachable]
 
     sanitized = data.copy()
 
@@ -1019,7 +1030,7 @@ def calculate_paid_price_with_installments(
     return total.quantize(Decimal("0.01"))
 
 
-def get_client_ip(request, trust_xff: bool | None = None) -> str:
+def get_client_ip(request: Any, trust_xff: bool | None = None) -> str:
     """
     Get client IP address from Django request.
 
@@ -1071,7 +1082,7 @@ def get_client_ip(request, trust_xff: bool | None = None) -> str:
                     f"{candidate_ip[:50]}... - falling back to REMOTE_ADDR"
                 )
 
-    return request.META.get("REMOTE_ADDR", "")
+    return cast(str, request.META.get("REMOTE_ADDR", ""))
 
 
 def _strip_port_and_brackets(candidate: str) -> str:

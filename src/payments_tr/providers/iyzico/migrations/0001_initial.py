@@ -529,7 +529,9 @@ class Migration(migrations.Migration):
                     ),
                 ],
                 "constraints": [
-                    models.CheckConstraint(
+                    models.CheckConstraint(  # type: ignore[call-overload]
+                        # Django 5.1 renamed ``check`` -> ``condition``; we
+                        # resolve the name via ``CHECKCONSTRAINT_PARAM``.
                         **{
                             CHECKCONSTRAINT_PARAM: models.Q(
                                 current_period_end__gte=models.F("current_period_start")

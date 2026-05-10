@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-05-10
+
+Patch release. Type-only cleanup pass — no public API change, no
+runtime behaviour change. `pytest -q` still 1349/1349 green.
+
+### Internal
+
+- **`mypy --strict` cleanup, pass 1.** Reduced the strict-mode error
+  count from **367 → 107** across 14 files. Fully cleaned: `admin.py`
+  (94 → 0), `viewsets.py` (26 → 0), `subscriptions/manager.py`
+  (24 → 0), `iyzico/models.py` (18 → 0), `installments/views.py`
+  (18 → 0), plus `models.py`, `decorators.py`, `iyzico/settings.py`,
+  `iyzico/utils.py`, `iyzico/monitoring.py`, `retry.py`,
+  `subscriptions/models.py`, plus the `0001_initial` migration's
+  `CheckConstraint(**{...})` call. The fixes break down as:
+  - Roughly 200 trivial annotation additions (return types on
+    functions that clearly return one thing, generic parameters on
+    `QuerySet[Any]` / `Manager[Any]` / `dict[str, Any]`, and
+    narrowing of `dict | None` to `dict[str, Any] | None`).
+  - Switched the Iyzico admin classes to the type-aware `@admin.display`
+    / `@admin.action` decorators, eliminating the dominant
+    `Callable.short_description has no attribute` family of errors.
+  - 48 explicit `# type: ignore[code]` comments — every one carries a
+    specific check-name (no bare `# type: ignore`). The dominant
+    categories are `[misc]` (11) for dynamic-base ViewSet / ModelAdmin
+    subclassing, `[import-untyped]` (9) for `rest_framework` and
+    `django_filters` (no upstream stubs), `[untyped-decorator]` (8)
+    for `@action` (DRF is untyped), and `[type-arg]` (4) for
+    `ModelAdmin` which is non-subscriptable at runtime in the Django
+    version we target.
+  - Two `cast()` adapters in `iyzico/utils.py:parse_iyzico_response`
+    where the runtime type is narrower than mypy can prove through
+    `json.loads`.
+  - `User = get_user_model()` in `subscriptions/manager.py` is now
+    swapped for a `TYPE_CHECKING` `User = Any` alias so the dozens
+    of `User?.id` resolutions go away without forcing a concrete
+    `AUTH_USER_MODEL` choice on integrators.
+  - `IyzicoPaymentAdminMixin` learnt a `TYPE_CHECKING`-only
+    `ModelAdmin` base so `self.message_user`, `self.get_queryset` etc.
+    resolve cleanly while runtime MRO stays unchanged.
+
+  The remaining 107 errors are concentrated in a handful of
+  files (`tasks.py`, `serializers.py`, `monitoring.py` already
+  cleaned, `stripe.py`, `installments/client.py`, ...) and skew
+  toward `[no-any-return]` and `[type-arg]` patterns that need a
+  bigger pass; left for follow-up.
+
+- **One real bug surfaced and flagged for follow-up.** In
+  `IyzicoClient.delete_card`, `card_user_key` is typed as `str` (and
+  required by the Iyzico SDK) but the matching `PaymentMethod`
+  model field is `CharField(null=True)`. We added a single
+  `# type: ignore[arg-type]` at the admin callsite rather than
+  silently coercing `None` to `""` (which would have changed
+  runtime behaviour). The right structural fix — either tightening
+  the model to `null=False` once data is migrated, or widening the
+  client signature to `str | None` and short-circuiting on `None` —
+  is left to a follow-up release.
+
 ## [0.5.1] - 2026-05-10
 
 Patch release. Four small but load-bearing fixes around concurrency,
