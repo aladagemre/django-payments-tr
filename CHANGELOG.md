@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-10
+
+Minor release. Tightens a long-standing data-contract mismatch on
+``PaymentMethod.card_user_key`` and continues the strict-mypy cleanup.
+Includes a Django data migration. No runtime API change for
+integrators who already have ``card_user_key`` populated on every row
+(which Iyzico requires in practice).
+
+### Changed (potentially breaking — read the migration note)
+
+- **`PaymentMethod.card_user_key` is now non-nullable.** Previously
+  declared as `CharField(null=True, blank=True)` while every callsite
+  (`IyzicoClient.delete_card`, `IyzicoClient.charge_with_token`)
+  required a `str` — the admin's bulk-delete path even carried a
+  `# type: ignore[arg-type]` to paper over the contract mismatch.
+  The new migration (`payments_tr_iyzico/0003`) backfills any
+  existing `NULL` values to `""` and applies `default=""` with
+  `null=False`. Iyzico does not issue a card token without a user
+  key in practice, so for typical deployments this is a no-op
+  data-wise; the migration's `RunPython` step is defensive. If you
+  somehow have rows with a `NULL` `card_user_key`, surface them
+  before upgrading — they will become `""` and the SDK call sites
+  will start raising `MISSING_CARD_USER_KEY` instead of silently
+  passing through.
+
+### Internal
+
+- **`mypy --strict` cleanup, pass 2.** Drove the remaining strict-mode
+  error count from **107 → ~75** without disabling `strict = true`.
+  Wired up a real `[tool.mypy]` `mypy_path = "tests"` plus per-module
+  overrides for `iyzipay`, `celery`, `rest_framework`,
+  `rest_framework_nested` and `stripe` (none of which ship type
+  stubs) so the noise from those imports doesn't drown out genuine
+  signals. Suppressed `[untyped-decorator]` only inside
+  `payments_tr.providers.iyzico.tasks` and `payments_tr.tasks` —
+  those are the only modules where Celery's untyped `@shared_task`
+  bubbles up. Cleaned up `serializers.py`, `async_base.py`,
+  `stripe.py` (dynamic SDK access typed as `Any` rather than
+  `TYPE_CHECKING` re-imports), `apps.py`, `exceptions.py`,
+  `__init__.py`. Removed several now-unused `# type: ignore[...]`
+  comments. The remaining ~75 errors are concentrated in management
+  commands, `webhooks/replay.py` (model-class-as-variable pattern),
+  and a handful of `[no-any-return]` cases that need bigger
+  refactors; left for the next pass.
+
+- **`django_settings_module` config.** `[tool.django-stubs]` and
+  `[tool.pytest.ini_options]` both reference `"settings"`, which
+  resolves via `pythonpath = ["src", "tests"]` for pytest but failed
+  for raw mypy invocations because mypy doesn't honour pytest's
+  pythonpath. Added `mypy_path = "tests"` so `mypy src/payments_tr`
+  works without setting `PYTHONPATH` manually (still needs
+  `TESTING=1` because `tests/settings.py` guards against accidental
+  use in non-test contexts).
+
 ## [0.5.2] - 2026-05-10
 
 Patch release. Type-only cleanup pass — no public API change, no

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from rest_framework import serializers  # type: ignore[import-not-found]
+    from rest_framework import serializers
 except ImportError as e:
     raise ImportError(
         "djangorestframework is required for payments_tr.contrib.serializers. "

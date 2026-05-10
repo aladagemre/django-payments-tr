@@ -468,11 +468,11 @@ def get_installment_options(request: HttpRequest) -> JsonResponse:
 
 # Optional: Django REST Framework ViewSet
 try:
-    from rest_framework import status, viewsets  # type: ignore[import-untyped]
-    from rest_framework.decorators import action  # type: ignore[import-untyped]
-    from rest_framework.permissions import IsAuthenticated  # type: ignore[import-untyped]
-    from rest_framework.response import Response  # type: ignore[import-untyped]
-    from rest_framework.throttling import UserRateThrottle  # type: ignore[import-untyped]
+    from rest_framework import status, viewsets
+    from rest_framework.decorators import action
+    from rest_framework.permissions import IsAuthenticated
+    from rest_framework.response import Response
+    from rest_framework.throttling import UserRateThrottle
 
     class InstallmentRateThrottle(UserRateThrottle):  # type: ignore[misc]
         """Rate throttle for installment endpoints to prevent BIN enumeration."""

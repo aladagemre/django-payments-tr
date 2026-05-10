@@ -23,7 +23,7 @@ class IyzicoError(Exception):
         self.error_group = error_group
         super().__init__(self.message)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return string representation of error."""
         if self.error_code:
             return f"[{self.error_code}] {self.message}"

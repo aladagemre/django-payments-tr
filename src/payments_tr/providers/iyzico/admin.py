@@ -1282,14 +1282,9 @@ try:
 
             for payment_method in queryset:
                 try:
-                    # Delete from Iyzico first.  ``card_user_key`` is
-                    # ``CharField(null=True)`` on the model but stored cards
-                    # always have a user key in practice (Iyzico won't issue
-                    # a card token without one); if it's missing the SDK
-                    # will raise and the ``except`` block reports it.
                     client.delete_card(
                         card_token=payment_method.card_token,
-                        card_user_key=payment_method.card_user_key,  # type: ignore[arg-type]
+                        card_user_key=payment_method.card_user_key,
                     )
 
                     # Delete from database

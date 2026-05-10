@@ -11,7 +11,7 @@ class IyzicoConfig(AppConfig):
     verbose_name = "Iyzico Payment Provider"
     default_auto_field = "django.db.models.BigAutoField"
 
-    def ready(self):
+    def ready(self) -> None:
         """Import signals when app is ready."""
         # Import signals to register them
         from . import signals  # noqa: F401

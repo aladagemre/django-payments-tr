@@ -10,7 +10,7 @@ Requires: pip install django-payments-tr[stripe]
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from django.conf import settings
 
@@ -22,9 +22,6 @@ from payments_tr.providers.base import (
     RefundResult,
     WebhookResult,
 )
-
-if TYPE_CHECKING:
-    import stripe as stripe_module  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +60,22 @@ class StripeProvider(PaymentProvider):
         try:
             import stripe
 
-            self._stripe: stripe_module = stripe
+            # Stripe SDK doesn't ship type stubs; treat the module surface as
+            # Any so attribute access (PaymentIntent, Refund, Webhook, …) is
+            # not flagged. The SDK API is the documented contract.
+            self._stripe: Any = stripe
         except ImportError as e:
             raise ImportError(
                 "stripe is required for the Stripe provider. "
                 "Install it with: pip install django-payments-tr[stripe]"
             ) from e
 
-        self._stripe.api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
+        # Stripe SDK exposes ``api_key`` as a module-level mutable attribute.
+        api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
+        self._stripe.api_key = api_key
         self._webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", "")
 
-        if not self._stripe.api_key:
+        if not api_key:
             logger.warning("STRIPE_SECRET_KEY not configured in settings")
 
     def create_payment(

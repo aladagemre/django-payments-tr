@@ -81,8 +81,8 @@ class PaymentMethod(models.Model):
     )
     card_user_key = models.CharField(
         max_length=255,
-        null=True,
         blank=True,
+        default="",
         db_index=True,
         help_text=_("Iyzico user key for card storage"),
     )

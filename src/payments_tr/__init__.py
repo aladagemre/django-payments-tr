@@ -41,7 +41,7 @@ from payments_tr.providers import (
 
 
 # Lazy import for models to avoid Django app registry issues
-def _get_models():
+def _get_models() -> dict[str, type]:
     """Lazy import of models."""
     from payments_tr.models import (
         AbstractPayment,

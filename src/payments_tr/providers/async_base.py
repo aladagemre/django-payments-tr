@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any
 
@@ -23,11 +24,11 @@ from payments_tr.providers.base import (
 )
 
 
-def run_sync_in_thread(func):
+def run_sync_in_thread[T](func: Callable[..., T]) -> Callable[..., Awaitable[T]]:
     """Decorator to run sync function in thread pool."""
 
     @wraps(func)
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
@@ -172,7 +173,7 @@ class AsyncProviderAdapter(AsyncPaymentProvider):
         >>> result = await async_provider.create_payment_async(payment)
     """
 
-    def __init__(self, sync_provider: PaymentProvider):
+    def __init__(self, sync_provider: PaymentProvider) -> None:
         """
         Initialize adapter with sync provider.
 

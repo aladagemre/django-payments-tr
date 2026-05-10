@@ -8,14 +8,14 @@ Provides viewsets for exposing payment data through REST APIs.
 from typing import Any
 
 try:
-    from rest_framework import (  # type: ignore[import-untyped]
+    from rest_framework import (
         filters,
         permissions,
         status,
         viewsets,
     )
-    from rest_framework.decorators import action  # type: ignore[import-untyped]
-    from rest_framework.response import Response  # type: ignore[import-untyped]
+    from rest_framework.decorators import action
+    from rest_framework.response import Response
 
     HAS_DRF = True
 except ImportError:

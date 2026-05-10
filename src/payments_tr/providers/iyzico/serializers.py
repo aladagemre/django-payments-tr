@@ -5,6 +5,8 @@ Optional module - only available if DRF is installed.
 Provides serializers for exposing payment data through REST APIs.
 """
 
+from typing import Any
+
 try:
     from rest_framework import serializers
 
@@ -88,17 +90,17 @@ if HAS_DRF:
             help_text="Whether payment can be refunded",
         )
 
-        def get_is_successful(self, obj):
-            return obj.is_successful()
+        def get_is_successful(self, obj: Any) -> bool:
+            return bool(obj.is_successful())
 
-        def get_is_failed(self, obj):
-            return obj.is_failed()
+        def get_is_failed(self, obj: Any) -> bool:
+            return bool(obj.is_failed())
 
-        def get_is_pending(self, obj):
-            return obj.is_pending()
+        def get_is_pending(self, obj: Any) -> bool:
+            return bool(obj.is_pending())
 
-        def get_can_be_refunded(self, obj):
-            return obj.can_be_refunded()
+        def get_can_be_refunded(self, obj: Any) -> bool:
+            return bool(obj.can_be_refunded())
 
         class Meta:
             model = AbstractIyzicoPayment
@@ -173,7 +175,7 @@ if HAS_DRF:
             help_text="Refund reason (optional)",
         )
 
-        def validate_amount(self, value):
+        def validate_amount(self, value: Any) -> Any:
             """Validate refund amount."""
             if value is not None and value <= 0:
                 raise serializers.ValidationError("Refund amount must be greater than zero")
@@ -233,7 +235,7 @@ if HAS_DRF:
             help_text="Filter payments created before this date",
         )
 
-        def validate(self, data):
+        def validate(self, data: dict[str, Any]) -> dict[str, Any]:
             """Cross-field validation."""
             # Validate amount range
             min_amount = data.get("min_amount")
@@ -255,7 +257,7 @@ if HAS_DRF:
 
 else:
     # Provide helpful error messages if DRF is not installed
-    def __getattr__(name):
+    def __getattr__(name: str) -> Any:
         """Raise helpful error when trying to use DRF serializers without DRF."""
         raise ImportError(
             f"Cannot use {name} because Django REST Framework is not installed. "

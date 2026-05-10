@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-payments-tr"
-version = "0.5.2"
+version = "0.6.0"
 description = "Payment processing for Django with Turkey-specific features (iyzico, Stripe, EFT, KDV)"
 readme = "README.md"
 license = "MIT"
@@ -138,6 +138,36 @@ python_version = "3.12"
 plugins = ["mypy_django_plugin.main"]
 strict = true
 warn_unreachable = true
+mypy_path = "tests"
+
+# Third-party packages without published type stubs. Listing them here keeps
+# strict mode honest about *our* code while not forcing us to vendor stubs for
+# every transitive dep (iyzipay SDK, celery, etc.).
+[[tool.mypy.overrides]]
+module = [
+    "iyzipay",
+    "iyzipay.*",
+    "celery",
+    "celery.*",
+    "rest_framework",
+    "rest_framework.*",
+    "rest_framework_nested",
+    "rest_framework_nested.*",
+    "stripe",
+    "stripe.*",
+]
+ignore_missing_imports = true
+
+# Celery's @shared_task decorator is untyped, which under strict mode bubbles
+# up "Untyped decorator makes function …" errors at every task definition.
+# The tasks themselves are fully annotated, so we silence the decorator-only
+# false positive in our task modules.
+[[tool.mypy.overrides]]
+module = [
+    "payments_tr.providers.iyzico.tasks",
+    "payments_tr.tasks",
+]
+disable_error_code = ["untyped-decorator", "misc"]
 
 [tool.django-stubs]
 django_settings_module = "settings"
