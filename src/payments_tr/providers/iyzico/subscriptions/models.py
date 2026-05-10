@@ -202,7 +202,7 @@ class PaymentMethod(models.Model):
         brand = self.get_card_brand_display()
         return f"{brand} ****{self.card_last_four} ({self.user})"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to handle default payment method logic."""
         if self.is_default and self.is_active:
             # Remove default from other payment methods for this user

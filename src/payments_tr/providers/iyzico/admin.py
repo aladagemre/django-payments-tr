@@ -4,8 +4,10 @@ Django admin interface for django-iyzico.
 Provides a comprehensive admin interface for payment management and monitoring.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin
 from django.db.models import Q, QuerySet
@@ -19,7 +21,18 @@ from .models import PaymentStatus
 logger = logging.getLogger(__name__)
 
 
-class IyzicoPaymentAdminMixin:
+if TYPE_CHECKING:
+    # The mixin is only ever used alongside ``admin.ModelAdmin`` (see the
+    # docstring example below).  Telling mypy that it conceptually inherits
+    # from ``ModelAdmin`` at type-check time means ``self.message_user``,
+    # ``self.get_queryset`` etc. resolve correctly without forcing a runtime
+    # MRO change that would affect existing subclasses.
+    _MixinBase = admin.ModelAdmin[Any]
+else:
+    _MixinBase = object
+
+
+class IyzicoPaymentAdminMixin(_MixinBase):
     """
     Reusable admin mixin for Iyzico payment models.
 
@@ -206,6 +219,7 @@ class IyzicoPaymentAdminMixin:
     # Actions
     actions = ["refund_payment", "export_csv"]
 
+    @admin.display(description=_("Status"), ordering="status")
     def get_status_badge(self, obj: Any) -> str:
         """
         Display colored status badge.
@@ -236,9 +250,7 @@ class IyzicoPaymentAdminMixin:
             status_display,
         )
 
-    get_status_badge.short_description = _("Status")
-    get_status_badge.admin_order_field = "status"
-
+    @admin.display(description=_("Amount"), ordering="amount")
     def get_amount_display_admin(self, obj: Any) -> str:
         """
         Display formatted amount with currency symbol and code.
@@ -263,7 +275,7 @@ class IyzicoPaymentAdminMixin:
                         '{} <span style="color: #666;">(paid: {})</span>', formatted, paid_formatted
                     )
 
-                return formatted
+                return str(formatted)
         except Exception:
             # Fallback to simple display
             pass
@@ -279,9 +291,7 @@ class IyzicoPaymentAdminMixin:
             )
         return f"{obj.amount} {obj.currency}"
 
-    get_amount_display_admin.short_description = _("Amount")
-    get_amount_display_admin.admin_order_field = "amount"
-
+    @admin.display(description=_("Buyer Name"), ordering="buyer_name")
     def get_buyer_name(self, obj: Any) -> str:
         """
         Get buyer's full name.
@@ -295,9 +305,7 @@ class IyzicoPaymentAdminMixin:
         full_name = obj.get_buyer_full_name()
         return full_name if full_name else "-"
 
-    get_buyer_name.short_description = _("Buyer Name")
-    get_buyer_name.admin_order_field = "buyer_name"
-
+    @admin.display(description=_("Card"))
     def get_card_display_admin(self, obj: Any) -> str:
         """
         Display card information safely.
@@ -310,8 +318,7 @@ class IyzicoPaymentAdminMixin:
         """
         return obj.get_card_display() or "-"
 
-    get_card_display_admin.short_description = _("Card")
-
+    @admin.display(description=_("Installment"), ordering="installment")
     def get_installment_display_admin(self, obj: Any) -> str:
         """
         Display installment information in list view.
@@ -337,7 +344,7 @@ class IyzicoPaymentAdminMixin:
                     display,
                 )
 
-            return display
+            return str(display)
 
         # Fallback if method not available
         if hasattr(obj, "installment") and obj.installment > 1:
@@ -345,9 +352,7 @@ class IyzicoPaymentAdminMixin:
 
         return "-"
 
-    get_installment_display_admin.short_description = _("Installment")
-    get_installment_display_admin.admin_order_field = "installment"
-
+    @admin.display(description=_("Installment Details"))
     def get_installment_details_admin(self, obj: Any) -> str:
         """
         Display detailed installment information in detail view.
@@ -505,8 +510,7 @@ class IyzicoPaymentAdminMixin:
         # untrusted input reaches the rendered HTML.
         return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
-    get_installment_details_admin.short_description = _("Installment Details")
-
+    @admin.display(description=_("Currency"), ordering="currency")
     def get_currency_display_admin(self, obj: Any) -> str:
         """
         Display currency with symbol and name.
@@ -534,11 +538,9 @@ class IyzicoPaymentAdminMixin:
             # Fallback to simple display
             pass
 
-        return obj.currency
+        return str(obj.currency)
 
-    get_currency_display_admin.short_description = _("Currency")
-    get_currency_display_admin.admin_order_field = "currency"
-
+    @admin.display(description=_("Raw Response"))
     def get_raw_response_display(self, obj: Any) -> str:
         """
         Display raw response as formatted JSON.
@@ -572,8 +574,7 @@ class IyzicoPaymentAdminMixin:
         except (TypeError, ValueError):
             return str(obj.raw_response)
 
-    get_raw_response_display.short_description = _("Raw Response")
-
+    @admin.display(description=_("Iyzico Dashboard"))
     def get_iyzico_dashboard_link(self, obj: Any) -> str:
         """
         Get link to Iyzico dashboard for this payment.
@@ -595,9 +596,8 @@ class IyzicoPaymentAdminMixin:
             dashboard_url,
         )
 
-    get_iyzico_dashboard_link.short_description = _("Iyzico Dashboard")
-
-    def refund_payment(self, request: HttpRequest, queryset: QuerySet) -> None:
+    @admin.action(description=_("Refund selected payments"))
+    def refund_payment(self, request: HttpRequest, queryset: QuerySet[Any]) -> None:
         """
         Admin action to refund payments.
 
@@ -658,8 +658,6 @@ class IyzicoPaymentAdminMixin:
                 request, f"Failed to refund {failed_count} payment(s).", level="warning"
             )
 
-    refund_payment.short_description = _("Refund selected payments")
-
     def _sanitize_csv_field(self, value: Any) -> str:
         """
         Sanitize a field value to prevent CSV injection attacks.
@@ -686,7 +684,8 @@ class IyzicoPaymentAdminMixin:
 
         return str_value
 
-    def export_csv(self, request: HttpRequest, queryset: QuerySet) -> HttpResponse:
+    @admin.action(description=_("Export selected payments to CSV"))
+    def export_csv(self, request: HttpRequest, queryset: QuerySet[Any]) -> HttpResponse:
         """
         Admin action to export payments to CSV.
 
@@ -759,8 +758,6 @@ class IyzicoPaymentAdminMixin:
 
         return response
 
-    export_csv.short_description = _("Export selected payments to CSV")
-
     def has_delete_permission(self, request: HttpRequest, obj: Any | None = None) -> bool:
         """
         Prevent deletion of successful payments.
@@ -783,7 +780,7 @@ class IyzicoPaymentAdminMixin:
         # Allow deletion of other statuses
         return True
 
-    def get_queryset(self, request: HttpRequest) -> QuerySet:
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
         """
         Optimize queryset with select_related if available.
 
@@ -813,7 +810,7 @@ try:
     )
 
     @admin.register(PaymentMethod)
-    class PaymentMethodAdmin(admin.ModelAdmin):
+    class PaymentMethodAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         """
         Admin interface for payment methods (stored cards).
 
@@ -942,14 +939,19 @@ try:
 
         actions = ["deactivate_cards", "set_as_default", "delete_from_iyzico"]
 
+        @admin.display(description=_("Brand"), ordering="card_brand")
         def get_card_brand_badge(self, obj: PaymentMethod) -> str:
             """Display card brand with colored badge."""
-            brand_colors = {
-                CardBrand.VISA: "#1A1F71",  # Visa blue
-                CardBrand.MASTERCARD: "#EB001B",  # Mastercard red
-                CardBrand.AMEX: "#006FCF",  # Amex blue
-                CardBrand.TROY: "#00A3E0",  # Troy blue
-                CardBrand.OTHER: "#6c757d",  # Gray
+            # ``CardBrand`` is a ``TextChoices`` subclass, so its members are
+            # ``str`` subclasses.  ``card_brand`` is stored as a plain
+            # ``CharField`` (``str``) — keying by the enum value (``str``)
+            # keeps mypy happy without changing runtime behaviour.
+            brand_colors: dict[str, str] = {
+                CardBrand.VISA.value: "#1A1F71",  # Visa blue
+                CardBrand.MASTERCARD.value: "#EB001B",  # Mastercard red
+                CardBrand.AMEX.value: "#006FCF",  # Amex blue
+                CardBrand.TROY.value: "#00A3E0",  # Troy blue
+                CardBrand.OTHER.value: "#6c757d",  # Gray
             }
 
             color = brand_colors.get(obj.card_brand, "#6c757d")
@@ -962,9 +964,7 @@ try:
                 brand_display,
             )
 
-        get_card_brand_badge.short_description = _("Brand")
-        get_card_brand_badge.admin_order_field = "card_brand"
-
+        @admin.display(description=_("Expiry"))
         def get_expiry_display(self, obj: PaymentMethod) -> str:
             """Display expiry date with warnings."""
             expiry_text = f"{obj.expiry_month}/{obj.expiry_year}"
@@ -982,8 +982,7 @@ try:
             else:
                 return expiry_text
 
-        get_expiry_display.short_description = _("Expiry")
-
+        @admin.display(description=_("Usage"))
         def get_usage_stats(self, obj: PaymentMethod) -> str:
             """
             Display payment method usage statistics.
@@ -1033,8 +1032,7 @@ try:
                 f"{total_amount:.2f} {escape(currency)}",
             )
 
-        get_usage_stats.short_description = _("Usage")
-
+        @admin.display(description=_("Usage Statistics"))
         def get_detailed_usage_stats(self, obj: PaymentMethod) -> str:
             """
             Display detailed payment method usage statistics in admin detail view.
@@ -1213,9 +1211,8 @@ try:
             # is a hex literal chosen inline. No untrusted input reaches HTML.
             return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
-        get_detailed_usage_stats.short_description = _("Usage Statistics")
-
-        def deactivate_cards(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Deactivate selected payment methods"))
+        def deactivate_cards(self, request: HttpRequest, queryset: QuerySet[PaymentMethod]) -> None:
             """Deactivate selected payment methods."""
             count = 0
             for payment_method in queryset:
@@ -1229,9 +1226,8 @@ try:
                 level="success",
             )
 
-        deactivate_cards.short_description = _("Deactivate selected payment methods")
-
-        def set_as_default(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Set as default payment method"))
+        def set_as_default(self, request: HttpRequest, queryset: QuerySet[PaymentMethod]) -> None:
             """Set selected payment method as default (only one)."""
             if queryset.count() != 1:
                 self.message_user(
@@ -1242,6 +1238,10 @@ try:
                 return
 
             payment_method = queryset.first()
+            if payment_method is None:
+                # Should be unreachable: ``count() == 1`` was checked above,
+                # but ``first()`` is typed as ``T | None`` so we narrow.
+                return
 
             if not payment_method.is_active:
                 self.message_user(
@@ -1269,9 +1269,10 @@ try:
                 level="success",
             )
 
-        set_as_default.short_description = _("Set as default payment method")
-
-        def delete_from_iyzico(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Delete from Iyzico and database"))
+        def delete_from_iyzico(
+            self, request: HttpRequest, queryset: QuerySet[PaymentMethod]
+        ) -> None:
             """Delete cards from Iyzico and database."""
             from .client import IyzicoClient
 
@@ -1281,10 +1282,14 @@ try:
 
             for payment_method in queryset:
                 try:
-                    # Delete from Iyzico first
+                    # Delete from Iyzico first.  ``card_user_key`` is
+                    # ``CharField(null=True)`` on the model but stored cards
+                    # always have a user key in practice (Iyzico won't issue
+                    # a card token without one); if it's missing the SDK
+                    # will raise and the ``except`` block reports it.
                     client.delete_card(
                         card_token=payment_method.card_token,
-                        card_user_key=payment_method.card_user_key,
+                        card_user_key=payment_method.card_user_key,  # type: ignore[arg-type]
                     )
 
                     # Delete from database
@@ -1320,8 +1325,6 @@ try:
                     level="warning",
                 )
 
-        delete_from_iyzico.short_description = _("Delete from Iyzico and database")
-
         def has_delete_permission(
             self, request: HttpRequest, obj: PaymentMethod | None = None
         ) -> bool:
@@ -1337,13 +1340,13 @@ try:
             # For others, they should use the action
             return False
 
-        def get_queryset(self, request: HttpRequest) -> QuerySet:
+        def get_queryset(self, request: HttpRequest) -> QuerySet[PaymentMethod]:
             """Optimize queryset."""
             qs = super().get_queryset(request)
             return qs.select_related("user")
 
     @admin.register(SubscriptionPlan)
-    class SubscriptionPlanAdmin(admin.ModelAdmin):
+    class SubscriptionPlanAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         """
         Admin interface for subscription plans.
 
@@ -1444,22 +1447,19 @@ try:
 
         actions = ["duplicate_plan", "toggle_active"]
 
+        @admin.display(description=_("Price"), ordering="price")
         def price_display(self, obj: SubscriptionPlan) -> str:
             """Display formatted price."""
             return f"{obj.price} {obj.currency}"
 
-        price_display.short_description = _("Price")
-        price_display.admin_order_field = "price"
-
+        @admin.display(description=_("Billing Interval"), ordering="billing_interval")
         def billing_interval_display(self, obj: SubscriptionPlan) -> str:
             """Display billing interval with count."""
             if obj.billing_interval_count == 1:
                 return obj.get_billing_interval_display()
             return f"Every {obj.billing_interval_count} {obj.get_billing_interval_display()}s"
 
-        billing_interval_display.short_description = _("Billing Interval")
-        billing_interval_display.admin_order_field = "billing_interval"
-
+        @admin.display(description=_("Subscribers"))
         def get_subscriber_count(self, obj: SubscriptionPlan) -> str:
             """Get active subscriber count."""
             count = obj.subscriptions.filter(
@@ -1475,9 +1475,10 @@ try:
 
             return f"{count} subscribers"
 
-        get_subscriber_count.short_description = _("Subscribers")
-
-        def duplicate_plan(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Duplicate selected plans"))
+        def duplicate_plan(
+            self, request: HttpRequest, queryset: QuerySet[SubscriptionPlan]
+        ) -> None:
             """Duplicate selected plans."""
             for plan in queryset:
                 plan.pk = None
@@ -1492,9 +1493,8 @@ try:
                 level="success",
             )
 
-        duplicate_plan.short_description = _("Duplicate selected plans")
-
-        def toggle_active(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Toggle active status"))
+        def toggle_active(self, request: HttpRequest, queryset: QuerySet[SubscriptionPlan]) -> None:
             """Toggle active status of selected plans."""
             for plan in queryset:
                 plan.is_active = not plan.is_active
@@ -1506,10 +1506,8 @@ try:
                 level="success",
             )
 
-        toggle_active.short_description = _("Toggle active status")
-
     @admin.register(Subscription)
-    class SubscriptionAdmin(admin.ModelAdmin):
+    class SubscriptionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         """
         Admin interface for subscriptions.
 
@@ -1618,16 +1616,21 @@ try:
 
         actions = ["cancel_subscriptions", "process_billing_manually"]
 
+        @admin.display(description=_("Status"), ordering="status")
         def get_status_badge(self, obj: Subscription) -> str:
             """Display colored status badge."""
-            status_colors = {
-                SubscriptionStatus.PENDING: "#ffc107",  # Yellow
-                SubscriptionStatus.TRIALING: "#17a2b8",  # Blue
-                SubscriptionStatus.ACTIVE: "#28a745",  # Green
-                SubscriptionStatus.PAST_DUE: "#fd7e14",  # Orange
-                SubscriptionStatus.PAUSED: "#6c757d",  # Gray
-                SubscriptionStatus.CANCELLED: "#343a40",  # Dark gray
-                SubscriptionStatus.EXPIRED: "#dc3545",  # Red
+            # ``SubscriptionStatus`` is a ``TextChoices`` subclass; its
+            # members are ``str`` subclasses.  ``status`` is stored as a
+            # ``CharField`` (``str``) — keying by ``.value`` keeps mypy
+            # happy without changing runtime behaviour.
+            status_colors: dict[str, str] = {
+                SubscriptionStatus.PENDING.value: "#ffc107",  # Yellow
+                SubscriptionStatus.TRIALING.value: "#17a2b8",  # Blue
+                SubscriptionStatus.ACTIVE.value: "#28a745",  # Green
+                SubscriptionStatus.PAST_DUE.value: "#fd7e14",  # Orange
+                SubscriptionStatus.PAUSED.value: "#6c757d",  # Gray
+                SubscriptionStatus.CANCELLED.value: "#343a40",  # Dark gray
+                SubscriptionStatus.EXPIRED.value: "#dc3545",  # Red
             }
 
             color = status_colors.get(obj.status, "#6c757d")
@@ -1641,22 +1644,18 @@ try:
                 status_display,
             )
 
-        get_status_badge.short_description = _("Status")
-        get_status_badge.admin_order_field = "status"
-
+        @admin.display(description=_("Successful Payments"))
         def get_payment_count(self, obj: Subscription) -> int:
             """Get successful payment count."""
             return obj.payments.filter(status="success").count()
 
-        get_payment_count.short_description = _("Successful Payments")
-
+        @admin.display(description=_("Total Paid"))
         def get_total_paid(self, obj: Subscription) -> str:
             """Get total amount paid."""
             total = obj.get_total_amount_paid()
             return f"{total} {obj.plan.currency}"
 
-        get_total_paid.short_description = _("Total Paid")
-
+        @admin.display(description=_("Recent Payments"))
         def get_payment_history(self, obj: Subscription) -> str:
             """Display payment history as table."""
             from django.utils.html import escape
@@ -1706,9 +1705,10 @@ try:
             # f-string interpolation. No untrusted input reaches HTML.
             return mark_safe("".join(html_parts))  # nosec - audited; all interpolations escape()-d
 
-        get_payment_history.short_description = _("Recent Payments")
-
-        def cancel_subscriptions(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Cancel selected subscriptions"))
+        def cancel_subscriptions(
+            self, request: HttpRequest, queryset: QuerySet[Subscription]
+        ) -> None:
             """Cancel selected subscriptions."""
             from .subscriptions.manager import SubscriptionManager
 
@@ -1730,9 +1730,10 @@ try:
                 level="success",
             )
 
-        cancel_subscriptions.short_description = _("Cancel selected subscriptions")
-
-        def process_billing_manually(self, request: HttpRequest, queryset: QuerySet) -> None:
+        @admin.action(description=_("Process billing manually"))
+        def process_billing_manually(
+            self, request: HttpRequest, queryset: QuerySet[Subscription]
+        ) -> None:
             """Process billing for selected subscriptions manually."""
             self.message_user(
                 request,
@@ -1741,15 +1742,13 @@ try:
                 level="warning",
             )
 
-        process_billing_manually.short_description = _("Process billing manually")
-
-        def get_queryset(self, request: HttpRequest) -> QuerySet:
+        def get_queryset(self, request: HttpRequest) -> QuerySet[Subscription]:
             """Optimize queryset."""
             qs = super().get_queryset(request)
             return qs.select_related("user", "plan").prefetch_related("payments")
 
     @admin.register(SubscriptionPayment)
-    class SubscriptionPaymentAdmin(IyzicoPaymentAdminMixin, admin.ModelAdmin):
+    class SubscriptionPaymentAdmin(IyzicoPaymentAdminMixin, admin.ModelAdmin):  # type: ignore[type-arg]
         """
         Admin interface for subscription payments.
 
@@ -1800,15 +1799,14 @@ try:
             ),
         ]
 
+        @admin.display(description=_("Billing Period"))
         def get_period_display(self, obj: SubscriptionPayment) -> str:
             """Display billing period."""
             return (
                 f"{obj.period_start.strftime('%Y-%m-%d')} - {obj.period_end.strftime('%Y-%m-%d')}"
             )
 
-        get_period_display.short_description = _("Billing Period")
-
-        def get_queryset(self, request: HttpRequest) -> QuerySet:
+        def get_queryset(self, request: HttpRequest) -> QuerySet[SubscriptionPayment]:
             """Optimize queryset."""
             qs = super().get_queryset(request)
             return qs.select_related("subscription", "subscription__user", "subscription__plan")

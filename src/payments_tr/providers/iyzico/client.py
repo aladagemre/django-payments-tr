@@ -485,7 +485,7 @@ class IyzicoClient:
     - Type hints throughout
     """
 
-    def __init__(self, settings=None):
+    def __init__(self, settings: Any = None) -> None:
         """
         Initialize Iyzico client.
 
@@ -493,7 +493,7 @@ class IyzicoClient:
             settings: Optional IyzicoSettings instance. If None, uses global settings.
         """
         self.settings = settings or iyzico_settings
-        self._options = None
+        self._options: dict[str, str] | None = None
         logger.debug("IyzicoClient initialized")
 
     def get_options(self) -> dict[str, str]:
