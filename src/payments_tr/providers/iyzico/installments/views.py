@@ -12,11 +12,12 @@ Security Note:
 
 import logging
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
@@ -28,7 +29,10 @@ logger = logging.getLogger(__name__)
 
 
 def _check_rate_limit(
-    request, cache_key_prefix: str, max_requests: int = 30, window_seconds: int = 60
+    request: HttpRequest,
+    cache_key_prefix: str,
+    max_requests: int = 30,
+    window_seconds: int = 60,
 ) -> bool:
     """
     Check if request is within rate limits.
@@ -91,7 +95,7 @@ class InstallmentOptionsView(LoginRequiredMixin, View):
     # Return JSON response for AJAX requests instead of redirect
     raise_exception = True
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Handle GET request for installment options."""
         try:
             # Get parameters
@@ -210,7 +214,7 @@ class BestInstallmentOptionsView(LoginRequiredMixin, View):
     # Return JSON response for AJAX requests instead of redirect
     raise_exception = True
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Handle GET request for best installment options."""
         try:
             # Get parameters
@@ -335,7 +339,7 @@ class ValidateInstallmentView(LoginRequiredMixin, View):
     # Return JSON response for AJAX requests instead of redirect
     raise_exception = True
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Handle POST request to validate installment."""
         import json
 
@@ -444,7 +448,7 @@ class ValidateInstallmentView(LoginRequiredMixin, View):
 # Function-based view for simple use cases
 @login_required
 @require_http_methods(["GET"])
-def get_installment_options(request):
+def get_installment_options(request: HttpRequest) -> JsonResponse:
     """
     Simple function-based view to get installment options.
 
@@ -464,18 +468,18 @@ def get_installment_options(request):
 
 # Optional: Django REST Framework ViewSet
 try:
-    from rest_framework import status, viewsets
-    from rest_framework.decorators import action
-    from rest_framework.permissions import IsAuthenticated
-    from rest_framework.response import Response
-    from rest_framework.throttling import UserRateThrottle
+    from rest_framework import status, viewsets  # type: ignore[import-untyped]
+    from rest_framework.decorators import action  # type: ignore[import-untyped]
+    from rest_framework.permissions import IsAuthenticated  # type: ignore[import-untyped]
+    from rest_framework.response import Response  # type: ignore[import-untyped]
+    from rest_framework.throttling import UserRateThrottle  # type: ignore[import-untyped]
 
-    class InstallmentRateThrottle(UserRateThrottle):
+    class InstallmentRateThrottle(UserRateThrottle):  # type: ignore[misc]
         """Rate throttle for installment endpoints to prevent BIN enumeration."""
 
         rate = "30/minute"
 
-    class InstallmentViewSet(viewsets.ViewSet):
+    class InstallmentViewSet(viewsets.ViewSet):  # type: ignore[misc]
         """
         ViewSet for installment operations (DRF).
 
@@ -490,8 +494,8 @@ try:
         permission_classes = [IsAuthenticated]
         throttle_classes = [InstallmentRateThrottle]
 
-        @action(detail=False, methods=["get"])
-        def options(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def options(self, request: Any) -> Any:
             """Get all installment options."""
             bin_number = request.query_params.get("bin")
             amount_str = request.query_params.get("amount")
@@ -530,8 +534,8 @@ try:
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-        @action(detail=False, methods=["get"])
-        def best(self, request):
+        @action(detail=False, methods=["get"])  # type: ignore[untyped-decorator]
+        def best(self, request: Any) -> Any:
             """Get best installment options."""
             bin_number = request.query_params.get("bin")
             amount_str = request.query_params.get("amount")
@@ -590,8 +594,8 @@ try:
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-        @action(detail=False, methods=["post"])
-        def validate(self, request):
+        @action(detail=False, methods=["post"])  # type: ignore[untyped-decorator]
+        def validate(self, request: Any) -> Any:
             """Validate installment selection."""
             bin_number = request.data.get("bin")
             amount_str = request.data.get("amount")
@@ -647,4 +651,4 @@ try:
 
 except ImportError:
     # DRF not installed, skip viewset
-    InstallmentViewSet = None
+    InstallmentViewSet = None  # type: ignore[misc, assignment]

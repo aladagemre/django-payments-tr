@@ -25,7 +25,7 @@ def with_payment_signals(
     created_signal: Any | None = None,
     confirmed_signal: Any | None = None,
     failed_signal: Any | None = None,
-):
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to automatically dispatch payment signals.
 
@@ -48,7 +48,7 @@ def with_payment_signals(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             # Execute function
             result = func(*args, **kwargs)
 
@@ -80,7 +80,7 @@ def with_payment_signals(
     return decorator
 
 
-def with_audit_log(operation: str):
+def with_audit_log(operation: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to automatically log operations to audit log.
 
@@ -96,7 +96,7 @@ def with_audit_log(operation: str):
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             from payments_tr.security import AuditLogger
 
             audit = AuditLogger()
@@ -158,7 +158,7 @@ def atomic_payment_operation[T](func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         with transaction.atomic():
             return func(*args, **kwargs)
 
@@ -169,7 +169,7 @@ def log_payment_operation(
     log_start: bool = True,
     log_end: bool = True,
     log_errors: bool = True,
-):
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to log payment operations.
 
@@ -186,7 +186,7 @@ def log_payment_operation(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             # Extract payment info if available
             payment = args[0] if args else None
             payment_id = getattr(payment, "id", None)
@@ -226,7 +226,7 @@ def log_payment_operation(
     return decorator
 
 
-def cache_provider_result(ttl: int = 300):
+def cache_provider_result(ttl: int = 300) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to cache provider API results.
 
@@ -241,7 +241,7 @@ def cache_provider_result(ttl: int = 300):
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             from django.core.cache import cache
 
             # Generate deterministic cache key
@@ -261,10 +261,10 @@ def cache_provider_result(ttl: int = 300):
                 return func(*args, **kwargs)
 
             # Try to get from cache
-            result = cache.get(cache_key)
-            if result is not None:
+            cached: Any = cache.get(cache_key)
+            if cached is not None:
                 logger.debug(f"Cache hit for {func.__name__}")
-                return result
+                return cached  # type: ignore[no-any-return]
 
             # Execute function and cache result
             result = func(*args, **kwargs)
@@ -278,7 +278,9 @@ def cache_provider_result(ttl: int = 300):
     return decorator
 
 
-def require_payment_provider(provider_name: str | None = None):
+def require_payment_provider(
+    provider_name: str | None = None,
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to ensure payment provider is available.
 
@@ -294,7 +296,7 @@ def require_payment_provider(provider_name: str | None = None):
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             from payments_tr.providers.registry import get_payment_provider
 
             try:
@@ -324,7 +326,7 @@ def measure_payment_time[T](func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         import time
 
         start_time = time.time()
@@ -354,7 +356,7 @@ def measure_payment_time[T](func: Callable[..., T]) -> Callable[..., T]:
 def handle_payment_errors(
     default_return: Any = None,
     log_errors: bool = True,
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to handle payment errors gracefully.
 
@@ -368,9 +370,9 @@ def handle_payment_errors(
         ...     return provider.get_payment_status(payment_id)
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return func(*args, **kwargs)
             except Exception as e:

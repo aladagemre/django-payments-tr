@@ -317,7 +317,7 @@ class AuditLogger:
     def log_refund(
         self,
         user: str,
-        payment_id: str | int,
+        payment_id: str | int | None,
         provider: str,
         success: bool,
         amount: int | None = None,

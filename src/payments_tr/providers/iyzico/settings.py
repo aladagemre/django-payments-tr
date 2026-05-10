@@ -1,6 +1,6 @@
 """Django settings configuration for django-iyzico."""
 
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -38,12 +38,12 @@ class IyzicoSettings:
     @property
     def api_key(self) -> str:
         """Iyzico API key."""
-        return get_setting("API_KEY", required=True)
+        return cast(str, get_setting("API_KEY", required=True))
 
     @property
     def secret_key(self) -> str:
         """Iyzico secret key."""
-        return get_setting("SECRET_KEY", required=True)
+        return cast(str, get_setting("SECRET_KEY", required=True))
 
     @property
     def base_url(self) -> str:
@@ -54,17 +54,17 @@ class IyzicoSettings:
         - Sandbox: https://sandbox-api.iyzipay.com
         - Production: https://api.iyzipay.com
         """
-        return get_setting("BASE_URL", default="https://sandbox-api.iyzipay.com")
+        return cast(str, get_setting("BASE_URL", default="https://sandbox-api.iyzipay.com"))
 
     @property
     def locale(self) -> str:
         """Default locale for Iyzico requests."""
-        return get_setting("LOCALE", default="tr")
+        return cast(str, get_setting("LOCALE", default="tr"))
 
     @property
     def currency(self) -> str:
         """Default currency for Iyzico payments."""
-        return get_setting("CURRENCY", default="TRY")
+        return cast(str, get_setting("CURRENCY", default="TRY"))
 
     @property
     def store_card_data(self) -> bool:
@@ -73,22 +73,22 @@ class IyzicoSettings:
 
         Note: Full card numbers are NEVER stored for PCI DSS compliance.
         """
-        return get_setting("STORE_CARD_DATA", default=True)
+        return cast(bool, get_setting("STORE_CARD_DATA", default=True))
 
     @property
     def enable_3d_secure(self) -> bool:
         """Whether 3D Secure is enabled by default."""
-        return get_setting("ENABLE_3D_SECURE", default=True)
+        return cast(bool, get_setting("ENABLE_3D_SECURE", default=True))
 
     @property
     def callback_url(self) -> str:
         """Callback URL for 3D Secure payments."""
-        return get_setting("CALLBACK_URL", default="/iyzico/callback/")
+        return cast(str, get_setting("CALLBACK_URL", default="/iyzico/callback/"))
 
     @property
     def webhook_url(self) -> str:
         """Webhook URL for payment notifications."""
-        return get_setting("WEBHOOK_URL", default="/iyzico/webhook/")
+        return cast(str, get_setting("WEBHOOK_URL", default="/iyzico/webhook/"))
 
     @property
     def webhook_secret(self) -> str:
@@ -98,7 +98,7 @@ class IyzicoSettings:
         If set, webhook requests will be validated using HMAC-SHA256 signature.
         Leave empty to disable signature validation.
         """
-        return get_setting("WEBHOOK_SECRET", default="")
+        return cast(str, get_setting("WEBHOOK_SECRET", default=""))
 
     @property
     def webhook_allowed_ips(self) -> list[str]:
@@ -114,7 +114,7 @@ class IyzicoSettings:
                 "127.0.0.1",        # Localhost for testing
             ]
         """
-        return get_setting("WEBHOOK_ALLOWED_IPS", default=[])
+        return cast(list[str], get_setting("WEBHOOK_ALLOWED_IPS", default=[]))
 
     @property
     def trust_x_forwarded_for(self) -> bool:
@@ -132,7 +132,7 @@ class IyzicoSettings:
             If you're behind a reverse proxy, set IYZICO_TRUST_X_FORWARDED_FOR=True
             to correctly detect client IP addresses through the proxy.
         """
-        return get_setting("TRUST_X_FORWARDED_FOR", default=False)
+        return cast(bool, get_setting("TRUST_X_FORWARDED_FOR", default=False))
 
     @property
     def strict_ip_validation(self) -> bool:
@@ -150,7 +150,7 @@ class IyzicoSettings:
             Iyzico API requires valid IP addresses. Setting this to False and
             using default IP (127.0.0.1) will cause API rejections in production.
         """
-        return get_setting("STRICT_IP_VALIDATION", default=True)
+        return cast(bool, get_setting("STRICT_IP_VALIDATION", default=True))
 
     @property
     def connection_timeout(self) -> float:
@@ -186,7 +186,7 @@ class IyzicoSettings:
 
         Note: This setting is ignored when IYZICO_STRICT_IP_VALIDATION is True.
         """
-        return get_setting("DEFAULT_IP", default="127.0.0.1")
+        return cast(str, get_setting("DEFAULT_IP", default="127.0.0.1"))
 
     def get_options(self) -> dict[str, str]:
         """
