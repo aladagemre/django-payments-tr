@@ -7,11 +7,13 @@ Handles webhooks, 3D Secure callbacks, and payment processing views.
 import json
 import logging
 
+from django.core.cache.backends.base import BaseCache
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
+from ..base import PaymentResult
 from .client import IyzicoClient
 from .exceptions import ThreeDSecureError
 from .settings import iyzico_settings
@@ -31,6 +33,26 @@ THREEDS_CALLBACK_RATE_LIMIT = 30  # requests per minute per IP
 THREEDS_CALLBACK_RATE_WINDOW = 60  # seconds
 WEBHOOK_RATE_LIMIT = 100  # requests per minute per IP
 WEBHOOK_RATE_WINDOW = 60  # seconds
+
+
+def _rate_limit_exceeded(cache: BaseCache, key: str, limit: int, window: int) -> bool:
+    """
+    Atomically count one hit against a fixed window and report if over limit.
+
+    A read-modify-write (get -> compare -> set) races under concurrency: many
+    simultaneous requests read the same pre-increment value and all pass, so
+    the effective limit is far higher than configured (M-04). ``cache.add``
+    (set-if-absent) plus ``cache.incr`` (atomic on Redis/Memcached) closes
+    that window. Returns True when this request should be rejected.
+    """
+    cache.add(key, 0, window)
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        # Key expired between add and incr; re-establish the window.
+        cache.add(key, 0, window)
+        count = cache.incr(key)
+    return bool(count > limit)
 
 
 def _validate_redirect_url(url: str | None, request: HttpRequest) -> str | None:
@@ -130,17 +152,16 @@ def threeds_callback_view(request: HttpRequest) -> HttpResponse:
     # Rate limiting - prevent brute force attacks
     client_ip = get_client_ip(request)
     rate_key = f"threeds_callback_rate_{client_ip}"
-    request_count = cache.get(rate_key, 0)
 
-    if request_count >= THREEDS_CALLBACK_RATE_LIMIT:
+    if _rate_limit_exceeded(
+        cache, rate_key, THREEDS_CALLBACK_RATE_LIMIT, THREEDS_CALLBACK_RATE_WINDOW
+    ):
         logger.warning(f"3DS callback rate limit exceeded for IP {client_ip}")
         return _handle_3ds_error(
             request,
             "Too many requests. Please try again later.",
             error_code="RATE_LIMIT_EXCEEDED",
         )
-
-    cache.set(rate_key, request_count + 1, THREEDS_CALLBACK_RATE_WINDOW)
 
     # Get token from either GET or POST
     token = request.GET.get("token") or request.POST.get("paymentId")
@@ -246,6 +267,22 @@ def threeds_callback_view(request: HttpRequest) -> HttpResponse:
         )
 
 
+def _confirm_webhook_token(token: str) -> PaymentResult:
+    """
+    Re-derive authoritative payment state from iyzico for a webhook token.
+
+    The shipped webhook view must not trust the attacker-suppliable
+    ``paymentId``/``status`` in the request body. When a checkout-form
+    notification carries a ``token``, we call iyzico server-side to confirm
+    the real result. Returns the provider's ``PaymentResult`` on success, or
+    ``None`` if confirmation could not be performed.
+    """
+    from payments_tr.providers.registry import get_payment_provider
+
+    provider = get_payment_provider("iyzico")
+    return provider.confirm_payment(token)
+
+
 @csrf_exempt
 @require_POST
 def webhook_view(request: HttpRequest) -> JsonResponse:
@@ -258,7 +295,9 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
     URL: /iyzico/webhook/
 
     Request Headers:
-        X-Iyzico-Signature: HMAC-SHA256 signature (if signature validation enabled)
+        X-IYZ-SIGNATURE-V3: iyzico webhook signature (verified against the
+            merchant secret key when present). The legacy ``X-Iyzico-Signature``
+            header is also accepted for backwards compatibility.
 
     Request Body (JSON):
         {
@@ -278,8 +317,12 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
         - Users should connect to the webhook_received signal to handle events
 
     Security:
-        - Optional signature validation via IYZICO_WEBHOOK_SECRET setting
-        - Optional IP whitelisting via IYZICO_WEBHOOK_ALLOWED_IPS setting
+        - Signature validation (X-IYZ-SIGNATURE-V3) against the merchant
+          IYZICO_SECRET_KEY whenever a signature header is present
+        - Server-side confirmation of the payment ``token`` before emitting
+          the ``webhook_received`` signal (never trusts the body's paymentId)
+        - IP whitelisting via IYZICO_WEBHOOK_ALLOWED_IPS (required in
+          production)
         - Rate limiting to prevent abuse
     """
     from django.core.cache import cache
@@ -292,9 +335,8 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
 
     # Rate limiting - prevent abuse
     rate_key = f"webhook_rate_{client_ip}"
-    request_count = cache.get(rate_key, 0)
 
-    if request_count >= WEBHOOK_RATE_LIMIT:
+    if _rate_limit_exceeded(cache, rate_key, WEBHOOK_RATE_LIMIT, WEBHOOK_RATE_WINDOW):
         logger.warning(f"Webhook rate limit exceeded for IP {client_ip}")
         # Return 200 to prevent webhook retry storms from payment provider
         # Error is indicated in the response body for logging/debugging
@@ -303,30 +345,30 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
             status=200,
         )
 
-    cache.set(rate_key, request_count + 1, WEBHOOK_RATE_WINDOW)
-
-    # Verify IP whitelist and webhook secret
+    # Verify IP whitelist and webhook signature.
+    #
+    # iyzico signs webhooks (header ``X-IYZ-SIGNATURE-V3``) with the merchant
+    # secret key, not a separate webhook secret. ``IYZICO_SECRET_KEY`` is
+    # always configured (it is required to talk to iyzico at all), so the
+    # signature path is keyed off it. The legacy ``IYZICO_WEBHOOK_SECRET`` is
+    # only used to *gate whether* signature verification is enforced, for
+    # backwards compatibility with existing deployments.
     allowed_ips = iyzico_settings.webhook_allowed_ips
-    webhook_secret = iyzico_settings.webhook_secret
+    secret_key = iyzico_settings.secret_key
 
     from django.conf import settings as django_settings
 
     is_debug = getattr(django_settings, "DEBUG", False)
 
-    # SECURITY: In production, require BOTH IP whitelist AND webhook secret
+    # SECURITY: In production, require the IP whitelist. Combined with
+    # server-side confirmation below, this prevents forged "paid" webhooks.
     if not is_debug:
-        security_issues = []
         if not allowed_ips:
-            security_issues.append("IYZICO_WEBHOOK_ALLOWED_IPS not configured")
-        if not webhook_secret:
-            security_issues.append("IYZICO_WEBHOOK_SECRET not configured")
-
-        if security_issues:
             logger.error(
-                f"SECURITY ERROR: Webhook security not properly configured! "
-                f"Issues: {', '.join(security_issues)}. "
-                f"Both IP whitelist AND webhook secret are required in production. "
-                f"Rejecting webhook to prevent unauthorized access."
+                "SECURITY ERROR: Webhook security not properly configured! "
+                "IYZICO_WEBHOOK_ALLOWED_IPS not configured. "
+                "The IP allowlist is required in production. "
+                "Rejecting webhook to prevent unauthorized access."
             )
             return JsonResponse(
                 {"status": "error", "message": "Webhook security not configured"},
@@ -339,11 +381,6 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
                 "Webhook IP whitelist not configured. Allowing all IPs in DEBUG mode. "
                 "Configure IYZICO_WEBHOOK_ALLOWED_IPS for production."
             )
-        if not webhook_secret:
-            logger.warning(
-                "Webhook secret not configured. Skipping signature validation in DEBUG mode. "
-                "Configure IYZICO_WEBHOOK_SECRET for production."
-            )
 
     # Verify IP whitelist (if configured)
     if allowed_ips and not is_ip_allowed(client_ip, allowed_ips):
@@ -352,18 +389,6 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
             {"status": "error", "message": "IP not allowed"},
             status=403,
         )
-
-    # Verify webhook signature (if configured)
-    if webhook_secret:
-        signature = request.META.get("HTTP_X_IYZICO_SIGNATURE", "")
-        payload = request.body
-
-        if not verify_webhook_signature(payload, signature, webhook_secret):
-            logger.warning("Webhook rejected - invalid signature")
-            return JsonResponse(
-                {"status": "error", "message": "Invalid signature"},
-                status=403,
-            )
 
     try:
         # Parse webhook data
@@ -376,27 +401,80 @@ def webhook_view(request: HttpRequest) -> JsonResponse:
                 status=200,  # Still return 200 to avoid retry
             )
 
-        # Extract event information
+        # Verify webhook signature against the parsed body using iyzico's
+        # real X-IYZ-SIGNATURE-V3 scheme (keyed by the merchant secret key).
+        # The legacy ``X-Iyzico-Signature`` header is also accepted so older
+        # senders keep working.
+        signature = request.META.get("HTTP_X_IYZ_SIGNATURE_V3", "") or request.META.get(
+            "HTTP_X_IYZICO_SIGNATURE", ""
+        )
+        signature_verified = False
+        if signature:
+            if verify_webhook_signature(webhook_data, signature, secret_key):
+                signature_verified = True
+            else:
+                logger.warning("Webhook rejected - invalid signature")
+                return JsonResponse(
+                    {"status": "error", "message": "Invalid signature"},
+                    status=403,
+                )
+
+        # Extract raw, attacker-suppliable event information. These values are
+        # NOT trusted until confirmed below.
         event_type = webhook_data.get("iyziEventType")
-        payment_id = webhook_data.get("paymentId")
+        raw_payment_id = webhook_data.get("paymentId")
         conversation_id = webhook_data.get("conversationId")
+        token = webhook_data.get("token")
 
         logger.info(
             f"Webhook event - type={event_type}, "
-            f"payment_id={payment_id}, "
-            f"conversation_id={conversation_id}"
+            f"payment_id={raw_payment_id}, "
+            f"conversation_id={conversation_id}, "
+            f"signature_verified={signature_verified}"
         )
 
         # Log full webhook data — sanitized to drop card data and PII.
         logger.debug("Webhook data: %s", sanitize_log_data(webhook_data))
 
-        # Trigger signal for webhook processing
-        # Users should connect to this signal to handle webhooks
+        # SECURITY (H-02): never trust the body's paymentId/status verbatim.
+        # When the notification carries a checkout-form ``token``, re-derive
+        # the authoritative payment state from iyzico server-side before
+        # emitting the signal. The signal exposes ``confirmed`` so handlers
+        # know whether ``payment_id``/``status`` are server-verified.
+        payment_id = raw_payment_id
+        status = webhook_data.get("status")
+        confirmed = False
+        if token:
+            try:
+                provider_result = _confirm_webhook_token(token)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Webhook token confirmation failed: %s", exc)
+                provider_result = None
+
+            if provider_result is not None:
+                confirmed = True
+                payment_id = provider_result.provider_payment_id or raw_payment_id
+                status = "succeeded" if provider_result.success else "failed"
+            else:
+                logger.warning(
+                    "Webhook token could not be confirmed server-side; "
+                    "emitting unconfirmed signal. Consumers MUST re-confirm "
+                    "before treating the payment as paid."
+                )
+
+        # Trigger signal for webhook processing.
+        # ``confirmed=True`` means payment_id/status were re-derived from
+        # iyzico server-side. When False, consumers MUST confirm the payment
+        # themselves (and pass expected_amount/expected_currency) before
+        # acting on it; the raw body values are not authenticated.
         webhook_received.send(
             sender=None,
             event_type=event_type,
             payment_id=payment_id,
             conversation_id=conversation_id,
+            status=status,
+            confirmed=confirmed,
+            signature_verified=signature_verified,
             data=webhook_data,
             request=request,
         )

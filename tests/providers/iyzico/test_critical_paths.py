@@ -441,23 +441,36 @@ class TestWebhookSecurity(TestCase):
             assert response.status_code == 403
 
     def test_webhook_signature_validation(self):
-        """Test webhook signature validation."""
+        """Test webhook signature validation against iyzico's real V3 scheme."""
         import hashlib
         import hmac
+        import json
 
         from payments_tr.providers.iyzico.utils import verify_webhook_signature
 
-        payload = b'{"event": "payment.success", "paymentId": "12345"}'
-        secret = "test_webhook_secret"
+        data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            "paymentId": "12345",
+            "paymentConversationId": "conv-1",
+            "status": "SUCCESS",
+        }
+        payload = json.dumps(data).encode()
+        secret = "test_secret_key"
 
-        # Generate valid signature
-        valid_signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        # iyzico signs secretKey + iyziEventType + paymentId +
+        # paymentConversationId + status, keyed by the secret key.
+        msg = secret + "CHECKOUT_FORM_AUTH" + "12345" + "conv-1" + "SUCCESS"
+        valid_signature = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
         # Valid signature should pass
         assert verify_webhook_signature(payload, valid_signature, secret) is True
 
         # Invalid signature should fail
         assert verify_webhook_signature(payload, "invalid_signature", secret) is False
+
+        # The OLD raw-body HMAC must NOT validate anymore (regression guard)
+        old_style = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        assert verify_webhook_signature(payload, old_style, secret) is False
 
 
 class TestSubscriptionPaymentConstraints(TestCase):

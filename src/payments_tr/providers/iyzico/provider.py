@@ -217,10 +217,23 @@ class IyzicoProvider(PaymentProvider):
                 if mismatch is not None:
                     return mismatch
 
+            # Surface iyzico's fraud-review status (L-02). A payment can be
+            # SUCCESS while still under fraud review (fraud_status <= 0);
+            # consumers should hold fulfilment in that case.
+            fraud_status = getattr(response, "fraud_status", None)
+            if fraud_status is not None and fraud_status <= 0:
+                logger.warning(
+                    "iyzico payment %s is successful but flagged for fraud "
+                    "review (fraudStatus=%s). Hold fulfilment until cleared.",
+                    response.payment_id,
+                    fraud_status,
+                )
+
             return PaymentResult(
                 success=True,
                 provider_payment_id=response.payment_id,
                 status="succeeded",
+                fraud_status=fraud_status,
                 raw_response=response.to_dict(),
             )
 
@@ -428,8 +441,15 @@ class IyzicoProvider(PaymentProvider):
                     error_message="No token in callback",
                 )
 
-            # Retrieve the payment result using the token
-            confirm_result = self.confirm_payment(token)
+            # Retrieve the payment result using the token. Thread expected
+            # amount/currency through when the caller supplies them (M-02 /
+            # L-03) so the webhook layer enforces TOCTOU amount-tampering
+            # defense, not just "payment succeeded".
+            confirm_result = self.confirm_payment(
+                token,
+                expected_amount=kwargs.get("expected_amount"),
+                expected_currency=kwargs.get("expected_currency"),
+            )
 
             if confirm_result.success:
                 return WebhookResult(

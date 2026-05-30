@@ -780,42 +780,123 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
+def build_iyzico_signature_string(data: dict[str, Any], secret_key: str) -> str:
     """
-    Verify webhook HMAC-SHA256 signature. Fail-closed.
+    Build the exact string iyzico signs for a webhook (X-IYZ-SIGNATURE-V3).
 
-    Returns ``False`` (not ``True``) when ``secret`` is empty — callers
-    must configure ``IYZICO_WEBHOOK_SECRET`` to accept webhooks. Earlier
-    versions returned ``True`` in this case, which silently accepted
-    every payload in any deployment that hadn't yet rotated to a
-    configured secret. That fail-open default is removed in v0.4.0.
+    iyzico's notification signature is **not** an HMAC over the raw JSON
+    body. It is HMAC-SHA256 (hex) over an ordered *concatenation* (no
+    separator) of specific event field values, where the merchant secret
+    key is both the first element of the concatenation **and** the HMAC
+    key. The field order depends on the notification type:
+
+    - Payment (default/IYZICO format)::
+
+        secretKey + iyziEventType + paymentId + paymentConversationId + status
+
+    - Payment (HPP/checkout-form format, identified by a ``token`` field)::
+
+        secretKey + iyziEventType + iyziPaymentId + token + paymentConversationId + status
+
+    - Subscription (identified by ``subscriptionReferenceCode``)::
+
+        merchantId + secretKey + eventType + subscriptionReferenceCode
+            + orderReferenceCode + customerReferenceCode
+
+    Missing fields are treated as empty strings, matching iyzico's
+    behaviour of concatenating whatever values are present in the event.
+
+    Reference: https://docs.iyzico.com/en/advanced/webhook
 
     Args:
-        payload: Raw request body as bytes.
-        signature: Signature from request header.
-        secret: Webhook secret key. **Must be non-empty.**
+        data: Parsed webhook JSON body.
+        secret_key: Merchant secret key (``IYZICO_SECRET_KEY``).
 
     Returns:
-        True only if the HMAC-SHA256 of ``payload`` keyed by ``secret``
-        matches ``signature`` byte-for-byte.
-
-    Example:
-        >>> import hashlib
-        >>> import hmac
-        >>> payload = b'{"event": "payment.success"}'
-        >>> secret = "my-secret-key"
-        >>> sig = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-        >>> verify_webhook_signature(payload, sig, secret)
-        True
-        >>> verify_webhook_signature(payload, "invalid", secret)
-        False
-        >>> verify_webhook_signature(payload, sig, "")
-        False
+        The string whose HMAC-SHA256 (keyed by ``secret_key``) iyzico
+        sends in the ``X-IYZ-SIGNATURE-V3`` header.
     """
-    if not secret:
+
+    def _s(key: str) -> str:
+        value = data.get(key)
+        return "" if value is None else str(value)
+
+    # Subscription notifications.
+    if data.get("subscriptionReferenceCode") is not None:
+        return (
+            _s("merchantId")
+            + secret_key
+            + _s("iyziEventType")
+            + _s("subscriptionReferenceCode")
+            + _s("orderReferenceCode")
+            + _s("customerReferenceCode")
+        )
+
+    # Hosted-payment-page / checkout-form notifications carry a token.
+    if data.get("token") is not None:
+        return (
+            secret_key
+            + _s("iyziEventType")
+            + _s("iyziPaymentId")
+            + _s("token")
+            + _s("paymentConversationId")
+            + _s("status")
+        )
+
+    # Default direct payment notification.
+    return (
+        secret_key
+        + _s("iyziEventType")
+        + _s("paymentId")
+        + _s("paymentConversationId")
+        + _s("status")
+    )
+
+
+def compute_iyzico_webhook_signature(data: dict[str, Any], secret_key: str) -> str:
+    """
+    Compute the iyzico ``X-IYZ-SIGNATURE-V3`` value for a parsed webhook.
+
+    See :func:`build_iyzico_signature_string` for the exact scheme.
+
+    Args:
+        data: Parsed webhook JSON body.
+        secret_key: Merchant secret key (``IYZICO_SECRET_KEY``).
+
+    Returns:
+        Hex-encoded HMAC-SHA256 signature.
+    """
+    msg = build_iyzico_signature_string(data, secret_key).encode("utf-8")
+    return hmac.new(secret_key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+
+def verify_iyzico_webhook_signature(
+    data: dict[str, Any], signature: str, secret_key: str
+) -> bool:
+    """
+    Verify an iyzico ``X-IYZ-SIGNATURE-V3`` webhook signature. Fail-closed.
+
+    This implements iyzico's *actual* notification-signature algorithm
+    (ordered field concatenation keyed by the merchant secret key — see
+    :func:`build_iyzico_signature_string`), which is what genuine iyzico
+    traffic uses. Earlier versions HMAC'd the raw JSON body keyed by a
+    separate ``IYZICO_WEBHOOK_SECRET``; that scheme can never match a real
+    iyzico signature.
+
+    Args:
+        data: Parsed webhook JSON body.
+        signature: Value of the ``X-IYZ-SIGNATURE-V3`` request header.
+        secret_key: Merchant secret key (``IYZICO_SECRET_KEY``). Must be
+            non-empty; an empty key fails closed.
+
+    Returns:
+        ``True`` only if the computed signature matches ``signature``
+        using a constant-time comparison.
+    """
+    if not secret_key:
         logger.error(
-            "Webhook signature verification rejected: no secret configured. "
-            "Set IYZICO_WEBHOOK_SECRET to accept webhooks."
+            "Webhook signature verification rejected: no secret key configured. "
+            "Set IYZICO_SECRET_KEY to verify iyzico webhook signatures."
         )
         return False
 
@@ -824,20 +905,72 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
         return False
 
     try:
-        # Compute expected signature
-        expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-
-        # Use constant-time comparison to prevent timing attacks
+        expected = compute_iyzico_webhook_signature(data, secret_key)
         is_valid = hmac.compare_digest(signature, expected)
-
         if not is_valid:
             logger.warning("Webhook signature mismatch")
-
         return is_valid
-
     except Exception as e:
         logger.error(f"Error verifying webhook signature: {e}")
         return False
+
+
+def verify_webhook_signature(
+    payload: bytes | dict[str, Any], signature: str, secret: str
+) -> bool:
+    """
+    Verify an iyzico webhook signature (``X-IYZ-SIGNATURE-V3``). Fail-closed.
+
+    .. warning::
+
+        **Behaviour change (security fix).** Previous versions computed an
+        HMAC-SHA256 over the *raw request body* keyed by a separate
+        ``IYZICO_WEBHOOK_SECRET``. iyzico does not sign the raw body — it
+        signs an ordered concatenation of specific event fields keyed by
+        the merchant **secret key** (see
+        :func:`build_iyzico_signature_string`). The old scheme could never
+        match a genuine iyzico signature, so it either rejected every real
+        webhook or was disabled, leaving the endpoint unauthenticated.
+
+        This function now implements iyzico's real scheme. Pass the
+        merchant ``IYZICO_SECRET_KEY`` as ``secret`` (the shipped
+        ``webhook_view`` does this automatically) and read the signature
+        from the ``X-IYZ-SIGNATURE-V3`` header.
+
+    Returns ``False`` (not ``True``) when ``secret`` is empty — fail-closed.
+
+    Args:
+        payload: Raw request body (``bytes``) or an already-parsed dict.
+        signature: Value of the ``X-IYZ-SIGNATURE-V3`` header.
+        secret: Merchant secret key (``IYZICO_SECRET_KEY``). Must be
+            non-empty.
+
+    Returns:
+        ``True`` only if the signature matches iyzico's computed value.
+    """
+    if not secret:
+        logger.error(
+            "Webhook signature verification rejected: no secret configured. "
+            "Set IYZICO_SECRET_KEY to accept webhooks."
+        )
+        return False
+
+    if not signature:
+        logger.warning("Webhook signature missing")
+        return False
+
+    if isinstance(payload, dict):
+        data = payload
+    else:
+        try:
+            import json
+
+            data = json.loads(payload.decode("utf-8") if isinstance(payload, bytes) else payload)
+        except Exception as e:
+            logger.error(f"Error parsing webhook payload for signature verification: {e}")
+            return False
+
+    return verify_iyzico_webhook_signature(data, signature, secret)
 
 
 def is_ip_allowed(ip_address: str, allowed_ips: list[str]) -> bool:

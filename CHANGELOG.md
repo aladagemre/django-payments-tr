@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Security remediation release. Fixes a set of findings from a defensive
+security audit. The headline change corrects the iyzico webhook signature
+scheme; integrators relying on `verify_webhook_signature` must read the
+behaviour note below.
+
+### Security (behaviour change — read this)
+
+- **iyzico webhook signature verification was wrong and is now correct
+  (H-01).** Previous versions computed an HMAC-SHA256 over the *raw JSON
+  body* keyed by a separate `IYZICO_WEBHOOK_SECRET`. iyzico does not sign
+  the raw body — it signs an ordered concatenation of specific event fields
+  (e.g. `secretKey + iyziEventType + paymentId + paymentConversationId +
+  status` for direct payment notifications) keyed by the **merchant secret
+  key**, sent in the `X-IYZ-SIGNATURE-V3` header. The old scheme could never
+  match a genuine iyzico signature. `verify_webhook_signature(payload,
+  signature, secret)` now implements iyzico's real scheme — pass
+  `IYZICO_SECRET_KEY` as `secret` (the shipped view does this for you) and
+  read the signature from `X-IYZ-SIGNATURE-V3`. New helpers
+  `build_iyzico_signature_string`, `compute_iyzico_webhook_signature`, and
+  `verify_iyzico_webhook_signature` are available. `IyzicoWebhookVerifier`
+  now verifies the parsed event dict with the same scheme.
+- **The shipped `webhook_view` now authenticates before emitting the
+  signal (H-02).** When a checkout-form `token` is present it re-derives the
+  authoritative `payment_id`/`status` from iyzico server-side
+  (`confirm_payment`) instead of trusting the attacker-suppliable body. The
+  `webhook_received` signal now carries `status`, `confirmed`, and
+  `signature_verified` kwargs; treat the payment as paid only when
+  `confirmed` is `True` (or after confirming it yourself).
+- **Webhook/3DS rate limiting is now atomic (M-04).** The non-atomic
+  cache read-modify-write (bypassable under concurrency) was replaced with
+  `cache.add` + `cache.incr`. A shared cache (Redis/Memcached) is required
+  for this to hold across workers.
+- **`IYZICO_BASE_URL` now defaults to production and is host-validated
+  (M-03).** The previous sandbox default silently sent production traffic to
+  the sandbox. The value is now validated against the known iyzico hosts and
+  must be HTTPS.
+- **Webhook confirmation can enforce amount/currency (M-02 / L-03).**
+  `_process_webhook` threads `expected_amount`/`expected_currency` into
+  `confirm_payment` when supplied.
+- **`BuyerInfo.to_dict()` no longer silently fabricates TCKN/phone/IP
+  (L-01).** Placeholder substitution for these KYC-adjacent fields now
+  requires `PAYMENTS_TR['ALLOW_BUYER_PLACEHOLDERS'] = True` (defaults to
+  enabled only under `DEBUG`); otherwise a missing value raises `ValueError`.
+- **iyzico `fraudStatus` is now surfaced (L-02).** `PaymentResult` gained a
+  `fraud_status` field; a successful-but-flagged payment (`fraud_status <=
+  0`) is logged so consumers can hold fulfilment.
+- **Webhook replay is idempotent (M-01).** `WebhookReplayer.replay_event`
+  short-circuits events already processed successfully, so re-running replay
+  cannot re-fire downstream side effects.
+
 ## [0.6.0] - 2026-05-10
 
 Minor release. Tightens a long-standing data-contract mismatch on

@@ -75,50 +75,63 @@ class TestIyzicoWebhookVerifier:
         assert verifier.secret == "test_secret"
 
     def test_verifier_init_from_settings(self):
-        """Test initializing verifier from settings."""
+        """Test initializing verifier from the merchant secret key setting."""
         with patch("payments_tr.security.settings") as mock_settings:
-            mock_settings.PAYMENTS_TR = {"SECURITY": {"IYZICO_WEBHOOK_SECRET": "settings_secret"}}
+            mock_settings.IYZICO_SECRET_KEY = "settings_secret"
+            mock_settings.PAYMENTS_TR = {}
             verifier = IyzicoWebhookVerifier()
             assert verifier.secret == "settings_secret"
 
     def test_verifier_init_no_secret_warning(self, caplog):
         """Test warning when no secret is configured."""
         with patch("payments_tr.security.settings") as mock_settings:
+            mock_settings.IYZICO_SECRET_KEY = ""
             mock_settings.PAYMENTS_TR = {}
             verifier = IyzicoWebhookVerifier()
             assert verifier.secret == ""
-            assert "webhook secret not configured" in caplog.text.lower()
+            assert "secret key not configured" in caplog.text.lower()
 
     def test_compute_signature(self):
-        """Test computing HMAC signature."""
-        verifier = IyzicoWebhookVerifier(secret="test_secret")
-        payload = b"test payload"
-        signature = verifier.compute_signature(payload)
+        """Test computing the iyzico X-IYZ-SIGNATURE-V3 signature."""
+        secret = "test_secret"
+        verifier = IyzicoWebhookVerifier(secret=secret)
+        data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            "paymentId": "123",
+            "paymentConversationId": "conv",
+            "status": "SUCCESS",
+        }
+        signature = verifier.compute_signature(data)
 
         # Verify signature format
         assert isinstance(signature, str)
         assert len(signature) == 64  # SHA256 hex digest
 
-        # Verify signature is correct
-        expected = hmac.new(b"test_secret", payload, hashlib.sha256).hexdigest()
+        # Verify signature follows iyzico's concat-and-key-by-secret scheme
+        msg = secret + "CHECKOUT_FORM_AUTH" + "123" + "conv" + "SUCCESS"
+        expected = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
         assert signature == expected
 
     def test_compute_signature_no_secret(self):
         """Test computing signature without secret raises error."""
         verifier = IyzicoWebhookVerifier(secret="")
         with pytest.raises(ValueError, match="secret not configured"):
-            verifier.compute_signature(b"test")
+            verifier.compute_signature({"iyziEventType": "X"})
 
     def test_verify_valid_signature(self):
-        """Test verifying valid signature."""
+        """Test verifying a valid iyzico-scheme signature."""
         secret = "test_secret"
         verifier = IyzicoWebhookVerifier(secret=secret)
-        payload = b"test payload"
+        data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            "paymentId": "123",
+            "paymentConversationId": "conv",
+            "status": "SUCCESS",
+        }
+        msg = secret + "CHECKOUT_FORM_AUTH" + "123" + "conv" + "SUCCESS"
+        signature = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
-        # Generate valid signature
-        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-
-        assert verifier.verify(payload, signature) is True
+        assert verifier.verify(data, signature) is True
 
     def test_verify_invalid_signature(self):
         """Test verifying invalid signature."""
@@ -244,8 +257,8 @@ class TestRateLimiter:
         """Test fallback to in-memory storage on cache error."""
         limiter = RateLimiter(max_requests=2, window=60)
 
-        # Mock cache to raise exception
-        with patch("payments_tr.security.cache.get", side_effect=Exception("Cache error")):
+        # Mock the atomic counter to raise so the in-memory fallback engages.
+        with patch("payments_tr.security.cache.incr", side_effect=Exception("Cache error")):
             assert limiter.allow("test-id") is True
             assert "cache error" in caplog.text.lower()
 

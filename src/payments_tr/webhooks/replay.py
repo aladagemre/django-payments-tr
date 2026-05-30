@@ -64,6 +64,18 @@ class WebhookReplayer:
         Returns:
             True if processing succeeded, False otherwise
         """
+        # Idempotency guard (M-01): never re-run the processor for an event
+        # that has already been processed successfully. Replaying it would
+        # re-fire downstream side effects (fulfilment, emails, credit grants)
+        # that are not guaranteed to be idempotent. Operators replay to
+        # recover *failed/pending* events, not to re-deliver completed ones.
+        if getattr(event, "processed", False) and getattr(event, "success", False):
+            logger.info(
+                f"Skipping already-processed webhook (idempotency guard): "
+                f"{event.event_id}"
+            )
+            return True
+
         try:
             event.mark_processing_started()
 
