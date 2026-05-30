@@ -70,10 +70,7 @@ class WebhookReplayer:
         # that are not guaranteed to be idempotent. Operators replay to
         # recover *failed/pending* events, not to re-deliver completed ones.
         if getattr(event, "processed", False) and getattr(event, "success", False):
-            logger.info(
-                f"Skipping already-processed webhook (idempotency guard): "
-                f"{event.event_id}"
-            )
+            logger.info(f"Skipping already-processed webhook (idempotency guard): {event.event_id}")
             return True
 
         try:

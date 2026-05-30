@@ -246,8 +246,7 @@ class RateLimiter:
 
             if count > self.max_requests:
                 logger.warning(
-                    f"Rate limit exceeded for {identifier}: "
-                    f"{count}/{self.max_requests} requests"
+                    f"Rate limit exceeded for {identifier}: {count}/{self.max_requests} requests"
                 )
                 return False
 

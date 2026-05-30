@@ -870,9 +870,7 @@ def compute_iyzico_webhook_signature(data: dict[str, Any], secret_key: str) -> s
     return hmac.new(secret_key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
 
 
-def verify_iyzico_webhook_signature(
-    data: dict[str, Any], signature: str, secret_key: str
-) -> bool:
+def verify_iyzico_webhook_signature(data: dict[str, Any], signature: str, secret_key: str) -> bool:
     """
     Verify an iyzico ``X-IYZ-SIGNATURE-V3`` webhook signature. Fail-closed.
 
@@ -915,9 +913,7 @@ def verify_iyzico_webhook_signature(
         return False
 
 
-def verify_webhook_signature(
-    payload: bytes | dict[str, Any], signature: str, secret: str
-) -> bool:
+def verify_webhook_signature(payload: bytes | dict[str, Any], signature: str, secret: str) -> bool:
     """
     Verify an iyzico webhook signature (``X-IYZ-SIGNATURE-V3``). Fail-closed.
 
