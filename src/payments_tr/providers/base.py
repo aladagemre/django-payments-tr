@@ -57,6 +57,12 @@ class PaymentResult:
         status: Current payment status string
         error_message: Error message if operation failed
         error_code: Provider-specific error code
+        fraud_status: Provider fraud-review status when available. For
+            iyzico: ``1`` = OK, ``0`` = pending review, ``-1`` = blocked/
+            under review. A payment can be ``success=True`` while still under
+            fraud review (``fraud_status <= 0``); consumers should hold
+            fulfilment in that case to limit chargeback exposure (L-02).
+            ``None`` when the provider did not report it.
         raw_response: Full response from provider for debugging
     """
 
@@ -68,6 +74,7 @@ class PaymentResult:
     status: str = ""
     error_message: str | None = None
     error_code: str | None = None
+    fraud_status: int | None = None
     raw_response: dict[str, Any] | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,6 +88,7 @@ class PaymentResult:
             "status": self.status,
             "error_message": self.error_message,
             "error_code": self.error_code,
+            "fraud_status": self.fraud_status,
         }
 
 
@@ -192,20 +200,73 @@ class BuyerInfo:
     ip: str = "127.0.0.1"
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for provider APIs."""
+        """
+        Convert to dictionary for provider APIs.
+
+        Security (L-01): identity number (TCKN), phone (GSM) and IP are
+        identity/KYC-adjacent. Silently substituting placeholders
+        (``11111111111`` / ``+905000000000`` / ``127.0.0.1``) corrupts the
+        gateway's fraud/3DS risk scoring and produces misleading AML records.
+        Placeholders for these fields are therefore only used when explicitly
+        allowed (``PAYMENTS_TR['ALLOW_BUYER_PLACEHOLDERS']``, which defaults
+        to ``True`` only when ``DEBUG`` is on). In production, a missing
+        sensitive value raises ``ValueError`` so the caller supplies real
+        data rather than fabricated KYC. Non-sensitive address fields keep
+        their generic defaults.
+        """
+        if self._allow_placeholders():
+            phone = self.phone or "+905000000000"
+            identity_number = self.identity_number or "11111111111"
+            ip = self.ip or "127.0.0.1"
+        else:
+            missing = [
+                name
+                for name, value in (
+                    ("phone", self.phone),
+                    ("identity_number", self.identity_number),
+                    ("ip", self.ip),
+                )
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    "BuyerInfo is missing required fields for a real gateway "
+                    f"request: {', '.join(missing)}. Supply genuine values, or "
+                    "set PAYMENTS_TR['ALLOW_BUYER_PLACEHOLDERS']=True (test "
+                    "environments only) to use placeholders. Fabricating "
+                    "TCKN/phone/IP degrades fraud scoring and AML records."
+                )
+            phone = self.phone
+            identity_number = self.identity_number
+            ip = self.ip
+
         return {
             "id": self.id or self.email,
             "email": self.email,
             "name": self.name or "Customer",
             "surname": self.surname or "Customer",
-            "gsmNumber": self.phone or "+905000000000",
-            "identityNumber": self.identity_number or "11111111111",
+            "gsmNumber": phone,
+            "identityNumber": identity_number,
             "registrationAddress": self.address or self.country,
-            "ip": self.ip,
+            "ip": ip,
             "city": self.city or "Istanbul",
             "country": self.country,
             "zipCode": self.zip_code or "34000",
         }
+
+    @staticmethod
+    def _allow_placeholders() -> bool:
+        """Whether placeholder TCKN/phone/IP substitution is permitted."""
+        try:
+            from django.conf import settings
+
+            payments_settings = getattr(settings, "PAYMENTS_TR", {}) or {}
+            if "ALLOW_BUYER_PLACEHOLDERS" in payments_settings:
+                return bool(payments_settings["ALLOW_BUYER_PLACEHOLDERS"])
+            return bool(getattr(settings, "DEBUG", False))
+        except Exception:
+            # Django not configured (e.g. unit import) — be permissive.
+            return True
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BuyerInfo:

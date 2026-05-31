@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 from django.conf import settings
 from django.contrib.sessions.middleware import SessionMiddleware
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 from payments_tr.providers.iyzico.exceptions import ThreeDSecureError
 from payments_tr.providers.iyzico.signals import threeds_completed, threeds_failed, webhook_received
@@ -20,11 +20,22 @@ from payments_tr.providers.iyzico.views import threeds_callback_view, webhook_vi
 
 
 def generate_webhook_signature(data: dict, secret: str = None) -> str:
-    """Generate valid webhook signature for testing."""
+    """Generate a valid iyzico X-IYZ-SIGNATURE-V3 webhook signature for testing.
+
+    iyzico concatenates (no separator) secretKey + iyziEventType + paymentId +
+    paymentConversationId + status and HMAC-SHA256s it keyed by the merchant
+    secret key. The signature is NOT an HMAC over the raw JSON body.
+    """
     if secret is None:
-        secret = getattr(settings, "IYZICO_WEBHOOK_SECRET", "test-webhook-secret")
-    payload = json.dumps(data).encode("utf-8")
-    return hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        secret = getattr(settings, "IYZICO_SECRET_KEY", "test-secret-key")
+    msg = (
+        secret
+        + str(data.get("iyziEventType", ""))
+        + str(data.get("paymentId", ""))
+        + str(data.get("paymentConversationId", ""))
+        + str(data.get("status", ""))
+    )
+    return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
 
 @pytest.fixture
@@ -460,6 +471,88 @@ class TestWebhookView:
             webhook_received.disconnect(receiver)
 
 
+class TestWebhookServerSideConfirmation:
+    """H-02: token-bearing webhooks are confirmed server-side, not trusted."""
+
+    def test_token_webhook_is_confirmed_server_side(self, request_factory):
+        """A token notification re-derives payment_id/status from iyzico."""
+        from payments_tr.providers.base import PaymentResult
+
+        webhook_data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            # Attacker-supplied raw values that must NOT be trusted verbatim.
+            "paymentId": "attacker-controlled",
+            "conversationId": "conv-9",
+            "status": "SUCCESS",
+            "token": "tok-real",
+        }
+
+        signal_received = []
+
+        def receiver(sender, **kwargs):
+            signal_received.append(kwargs)
+
+        confirmed = PaymentResult(
+            success=True, provider_payment_id="server-confirmed-id", status="succeeded"
+        )
+
+        webhook_received.connect(receiver)
+        try:
+            # No signature header: authentication here is via the IP allowlist
+            # (127.0.0.1 is allowed in test settings) plus server-side token
+            # confirmation, which is exactly the path under test.
+            request = create_json_post_request(
+                request_factory, "/webhook/", webhook_data, include_signature=False
+            )
+            with patch(
+                "payments_tr.providers.iyzico.views._confirm_webhook_token",
+                return_value=confirmed,
+            ) as mock_confirm:
+                response = webhook_view(request)
+
+            assert response.status_code == 200
+            mock_confirm.assert_called_once_with("tok-real")
+            assert len(signal_received) == 1
+            kw = signal_received[0]
+            # The signal carries the SERVER-confirmed id, not the body value.
+            assert kw["payment_id"] == "server-confirmed-id"
+            assert kw["payment_id"] != "attacker-controlled"
+            assert kw["confirmed"] is True
+            assert kw["status"] == "succeeded"
+        finally:
+            webhook_received.disconnect(receiver)
+
+    def test_token_webhook_unconfirmed_when_confirmation_fails(self, request_factory):
+        """If server-side confirmation errors, signal fires with confirmed=False."""
+        webhook_data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            "paymentId": "raw-id",
+            "status": "SUCCESS",
+            "token": "tok-bad",
+        }
+
+        signal_received = []
+
+        def receiver(sender, **kwargs):
+            signal_received.append(kwargs)
+
+        webhook_received.connect(receiver)
+        try:
+            request = create_json_post_request(
+                request_factory, "/webhook/", webhook_data, include_signature=False
+            )
+            with patch(
+                "payments_tr.providers.iyzico.views._confirm_webhook_token",
+                side_effect=Exception("iyzico down"),
+            ):
+                response = webhook_view(request)
+
+            assert response.status_code == 200
+            assert signal_received[0]["confirmed"] is False
+        finally:
+            webhook_received.disconnect(receiver)
+
+
 class TestWebhookViewSecurity:
     """Test webhook view security features."""
 
@@ -489,19 +582,17 @@ class TestWebhookViewSecurity:
         response_data = json.loads(response.content)
         assert "ip" in response_data["message"].lower()
 
-    @patch("django.conf.settings.IYZICO_WEBHOOK_SECRET", "test-secret", create=True)
     def test_webhook_with_valid_signature(self, request_factory):
-        """Test webhook with valid signature is accepted."""
-        import hashlib
-        import hmac
-
+        """Test webhook with a valid iyzico V3 signature is accepted."""
         webhook_data = {"iyziEventType": "payment.success", "paymentId": "test-123"}
-        secret = "test-secret"
-        payload = json.dumps(webhook_data).encode("utf-8")
-        signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        # generate_webhook_signature uses the real iyzico scheme keyed by
+        # the merchant secret key (IYZICO_SECRET_KEY).
+        signature = generate_webhook_signature(webhook_data)
 
-        request = create_json_post_request(request_factory, "/webhook/", webhook_data)
-        request.META["HTTP_X_IYZICO_SIGNATURE"] = signature
+        request = create_json_post_request(
+            request_factory, "/webhook/", webhook_data, include_signature=False
+        )
+        request.META["HTTP_X_IYZ_SIGNATURE_V3"] = signature
 
         response = webhook_view(request)
         assert response.status_code == 200
@@ -530,21 +621,31 @@ class TestWebhookViewSecurity:
         response = webhook_view(request)
         assert response.status_code == 200
 
-    @patch("django.conf.settings.IYZICO_WEBHOOK_SECRET", "", create=True)
-    @patch("django.conf.settings.IYZICO_WEBHOOK_ALLOWED_IPS", [], create=True)
-    @patch("django.conf.settings.DEBUG", True, create=True)
-    def test_webhook_no_secret_configured_skips_validation(self, request_factory):
-        """Test webhook without secret configured skips signature validation in DEBUG mode."""
+    @override_settings(DEBUG=True, IYZICO_WEBHOOK_ALLOWED_IPS=[])
+    def test_webhook_no_signature_skips_validation_in_debug(self, request_factory):
+        """Without a signature header (and no IP allowlist) DEBUG accepts the webhook."""
         webhook_data = {"iyziEventType": "payment.success"}
 
         request = create_json_post_request(
             request_factory, "/webhook/", webhook_data, include_signature=False
         )
-        # Even with invalid/no signature, should pass in DEBUG mode without secret
-        request.META["HTTP_X_IYZICO_SIGNATURE"] = "invalid"
 
         response = webhook_view(request)
         assert response.status_code == 200
+
+    @override_settings(DEBUG=True, IYZICO_WEBHOOK_ALLOWED_IPS=[])
+    def test_webhook_present_signature_always_verified(self, request_factory):
+        """If a signature IS present it is verified even in DEBUG mode (fix H-01)."""
+        webhook_data = {"iyziEventType": "payment.success"}
+
+        request = create_json_post_request(
+            request_factory, "/webhook/", webhook_data, include_signature=False
+        )
+        # A present-but-wrong signature must be rejected, not skipped.
+        request.META["HTTP_X_IYZ_SIGNATURE_V3"] = "deadbeef"
+
+        response = webhook_view(request)
+        assert response.status_code == 403
 
     @patch("django.conf.settings.IYZICO_WEBHOOK_ALLOWED_IPS", ["203.0.113.1"], create=True)
     @patch("django.conf.settings.IYZICO_TRUST_X_FORWARDED_FOR", True, create=True)

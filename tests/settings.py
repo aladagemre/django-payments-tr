@@ -81,6 +81,12 @@ IYZICO_CURRENCY = "TRY"
 IYZICO_WEBHOOK_SECRET = "test-webhook-secret"
 IYZICO_WEBHOOK_ALLOWED_IPS = ["127.0.0.1", "192.168.1.0/24", "10.0.0.0/8"]
 
+# Test environment: allow BuyerInfo placeholder TCKN/phone/IP substitution
+# (never enable this in production — see BuyerInfo.to_dict, L-01).
+PAYMENTS_TR = {
+    "ALLOW_BUYER_PLACEHOLDERS": True,
+}
+
 # Celery settings for testing (eager execution - no broker needed)
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True

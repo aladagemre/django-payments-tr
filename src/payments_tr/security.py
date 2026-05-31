@@ -10,7 +10,6 @@ This module provides security features including:
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import logging
 import time
@@ -19,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.core.cache import cache
@@ -64,14 +63,26 @@ class SecurityConfig:
 
 class IyzicoWebhookVerifier:
     """
-    Webhook signature verification for iyzico.
+    Webhook signature verification for iyzico (``X-IYZ-SIGNATURE-V3``).
 
-    iyzico uses HMAC-SHA256 for webhook signatures. This verifier
-    ensures that incoming webhooks are authentic.
+    .. warning::
+
+        **Behaviour change (security fix).** iyzico does **not** sign the
+        raw JSON body. It signs an ordered concatenation of specific event
+        fields keyed by the merchant **secret key** (``IYZICO_SECRET_KEY``).
+        Previous versions HMAC'd the raw payload keyed by a separate
+        ``IYZICO_WEBHOOK_SECRET``; that scheme could never match a genuine
+        iyzico signature. This verifier now implements iyzico's real
+        algorithm — see
+        :func:`payments_tr.providers.iyzico.utils.build_iyzico_signature_string`.
+
+        Pass the merchant secret key as ``secret``. ``compute_signature``
+        and ``verify`` now take the *parsed* webhook ``dict`` (a raw
+        ``bytes`` body is still accepted and parsed for compatibility).
 
     Example:
-        >>> verifier = IyzicoWebhookVerifier(secret="your-webhook-secret")
-        >>> is_valid = verifier.verify(payload, signature)
+        >>> verifier = IyzicoWebhookVerifier(secret="your-secret-key")
+        >>> is_valid = verifier.verify(webhook_dict, signature)
     """
 
     def __init__(self, secret: str | None = None):
@@ -79,45 +90,61 @@ class IyzicoWebhookVerifier:
         Initialize the verifier.
 
         Args:
-            secret: Webhook secret key, or None to load from settings
+            secret: Merchant secret key (``IYZICO_SECRET_KEY``), or None to
+                load it from ``IYZICO_SECRET_KEY`` / the legacy
+                ``PAYMENTS_TR['SECURITY']['IYZICO_WEBHOOK_SECRET']`` setting.
         """
         if secret is None:
-            config = SecurityConfig.from_settings()
-            secret = config.iyzico_webhook_secret
+            secret = getattr(settings, "IYZICO_SECRET_KEY", "") or ""
+            if not secret:
+                # Backwards-compatible fallback to the legacy setting.
+                config = SecurityConfig.from_settings()
+                secret = config.iyzico_webhook_secret
 
         if not secret:
             logger.warning(
-                "iyzico webhook secret not configured. "
+                "iyzico secret key not configured. "
                 "Webhook verification will fail. "
-                "Set PAYMENTS_TR['SECURITY']['IYZICO_WEBHOOK_SECRET'] in settings."
+                "Set IYZICO_SECRET_KEY in settings."
             )
         self.secret = secret
 
-    def compute_signature(self, payload: bytes) -> str:
+    @staticmethod
+    def _as_dict(payload: bytes | dict[str, Any]) -> dict[str, Any]:
+        if isinstance(payload, dict):
+            return payload
+        import json
+
+        raw = payload.decode("utf-8") if isinstance(payload, (bytes, bytearray)) else payload
+        return cast("dict[str, Any]", json.loads(raw))
+
+    def compute_signature(self, payload: bytes | dict[str, Any]) -> str:
         """
-        Compute HMAC-SHA256 signature for payload.
+        Compute the iyzico ``X-IYZ-SIGNATURE-V3`` signature for a payload.
 
         Args:
-            payload: Raw webhook payload bytes
+            payload: Parsed webhook dict, or raw JSON body bytes.
 
         Returns:
-            Hex-encoded signature string
+            Hex-encoded signature string.
         """
         if not self.secret:
             raise ValueError("Webhook secret not configured")
 
-        return hmac.new(self.secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+        from payments_tr.providers.iyzico.utils import compute_iyzico_webhook_signature
 
-    def verify(self, payload: bytes, signature: str) -> bool:
+        return compute_iyzico_webhook_signature(self._as_dict(payload), self.secret)
+
+    def verify(self, payload: bytes | dict[str, Any], signature: str) -> bool:
         """
-        Verify webhook signature.
+        Verify an iyzico webhook signature.
 
         Args:
-            payload: Raw webhook payload bytes
-            signature: Signature from webhook headers
+            payload: Parsed webhook dict, or raw JSON body bytes.
+            signature: Value of the ``X-IYZ-SIGNATURE-V3`` header.
 
         Returns:
-            True if signature is valid, False otherwise
+            True if signature is valid, False otherwise.
         """
         if not self.secret:
             logger.error("Cannot verify webhook: secret not configured")
@@ -197,19 +224,32 @@ class RateLimiter:
         cache_key = self._get_cache_key(identifier)
 
         try:
-            # Try to use Django cache
-            requests = cache.get(cache_key, [])
-            requests = self._clean_old_requests(requests, current_time)
+            # Atomic fixed-window counter.
+            #
+            # A read-modify-write (get -> compare -> set) races under
+            # concurrency: N simultaneous requests all read the same
+            # pre-increment value and all pass, so the effective limit is
+            # much higher than configured. ``cache.add`` (only sets if absent)
+            # plus ``cache.incr`` (atomic on real backends like Redis/
+            # Memcached) closes that window.
+            #
+            # ``cache.add`` returns False if the key already exists, so the
+            # window TTL is established exactly once per window and the
+            # counter naturally resets when the key expires.
+            cache.add(cache_key, 0, self.window)
+            try:
+                count = cache.incr(cache_key)
+            except ValueError:
+                # Key expired between add and incr; re-establish it.
+                cache.add(cache_key, 0, self.window)
+                count = cache.incr(cache_key)
 
-            if len(requests) >= self.max_requests:
+            if count > self.max_requests:
                 logger.warning(
-                    f"Rate limit exceeded for {identifier}: "
-                    f"{len(requests)}/{self.max_requests} requests"
+                    f"Rate limit exceeded for {identifier}: {count}/{self.max_requests} requests"
                 )
                 return False
 
-            requests.append(current_time)
-            cache.set(cache_key, requests, self.window + 10)
             return True
 
         except Exception as e:

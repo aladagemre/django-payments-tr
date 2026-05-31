@@ -26,21 +26,37 @@ unpatched vulnerabilities. Expect an acknowledgement within 72 hours.
 
 ### 1. Always verify webhook signatures
 
-The base provider's `handle_webhook` template method enforces
-signature presence; subclass providers cannot bypass it. Stripe raises
-`ValueError` on missing signatures; Iyzico opts into alternative auth
-(server-side token retrieval) and the helper
-`verify_webhook_signature` is used by the shipped Iyzico webhook view.
+> **Security fix (signature scheme corrected).** iyzico does **not** sign
+> the raw JSON body, and it does **not** use a separate "webhook secret".
+> It signs an *ordered concatenation of specific event fields keyed by your
+> merchant secret key* (`IYZICO_SECRET_KEY`) and sends the result in the
+> `X-IYZ-SIGNATURE-V3` header. Previous versions of this library HMAC'd the
+> raw body keyed by `IYZICO_WEBHOOK_SECRET`; that scheme could never match a
+> genuine iyzico signature, so it either rejected every real webhook or was
+> turned off, leaving the endpoint unauthenticated. The library now
+> implements iyzico's real scheme. The webhook-signature feature must be
+> enabled on your iyzico account (contact iyzico support).
+
+The exact signed string (no separators) by notification type is:
+
+| Type | Signed string |
+|------|---------------|
+| Payment (direct) | `secretKey + iyziEventType + paymentId + paymentConversationId + status` |
+| Payment (HPP/checkout form) | `secretKey + iyziEventType + iyziPaymentId + token + paymentConversationId + status` |
+| Subscription | `merchantId + secretKey + eventType + subscriptionReferenceCode + orderReferenceCode + customerReferenceCode` |
+
+…each HMAC-SHA256'd (hex) keyed by `IYZICO_SECRET_KEY`.
 
 ```python
 # settings.py
-IYZICO_WEBHOOK_SECRET = os.environ["IYZICO_WEBHOOK_SECRET"]
+IYZICO_SECRET_KEY = os.environ["IYZICO_SECRET_KEY"]  # also used to sign webhooks
 STRIPE_WEBHOOK_SECRET = os.environ["STRIPE_WEBHOOK_SECRET"]
 ```
 
-`verify_webhook_signature(payload, signature, secret)` is **fail-closed**
-in v0.4.0+: if `secret` is empty, it returns `False` and refuses to
-accept the webhook. Earlier versions returned `True` in that case.
+`verify_webhook_signature(payload, signature, secret)` is **fail-closed**:
+if `secret` is empty it returns `False` and refuses the webhook. It accepts
+either the raw body (`bytes`) or an already-parsed `dict` and verifies
+against iyzico's real scheme above.
 
 ```python
 from django.views.decorators.csrf import csrf_exempt
@@ -54,16 +70,28 @@ def iyzico_webhook(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
 
-    signature = request.headers.get("X-Iyzico-Signature", "")
+    # iyzico sends the signature in X-IYZ-SIGNATURE-V3, keyed by the
+    # MERCHANT SECRET KEY (not a separate webhook secret).
+    signature = request.headers.get("X-IYZ-SIGNATURE-V3", "")
     if not verify_webhook_signature(
-        request.body, signature, iyzico_settings.webhook_secret
+        request.body, signature, iyzico_settings.secret_key
     ):
         return HttpResponseForbidden("Invalid signature")
 
+    # Re-confirm server-side: never trust the body's paymentId/status.
     provider = get_payment_provider("iyzico")
     result = provider.handle_webhook(request.body, signature=signature)
     return JsonResponse({"status": "received" if result.success else "rejected"})
 ```
+
+The shipped `webhook_view` already does the above for you: it verifies any
+`X-IYZ-SIGNATURE-V3` header against the merchant secret key, and when a
+checkout-form `token` is present it re-derives the authoritative
+`payment_id`/`status` from iyzico server-side **before** emitting the
+`webhook_received` signal. The signal now carries `confirmed` and
+`signature_verified` flags. If `confirmed` is `False`, you **must** confirm
+the payment yourself (passing `expected_amount`/`expected_currency`) before
+treating it as paid — the raw body values are not authenticated.
 
 ### 2. Use HTTPS for webhook endpoints
 

@@ -6,6 +6,7 @@ SECURITY CRITICAL: Card masking tests ensure PCI DSS compliance.
 
 import hashlib
 import hmac
+import json
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -13,6 +14,8 @@ import pytest
 
 from payments_tr.providers.iyzico.exceptions import ValidationError
 from payments_tr.providers.iyzico.utils import (
+    build_iyzico_signature_string,
+    compute_iyzico_webhook_signature,
     extract_card_info,
     format_address_data,
     format_buyer_data,
@@ -24,6 +27,7 @@ from payments_tr.providers.iyzico.utils import (
     sanitize_log_data,
     validate_amount,
     validate_payment_data,
+    verify_iyzico_webhook_signature,
     verify_webhook_signature,
 )
 
@@ -682,27 +686,116 @@ class TestSanitizeLogData:
         assert result == {}
 
 
+def _iyzico_payment_event() -> dict:
+    """A representative iyzico payment notification body."""
+    return {
+        "iyziEventType": "CHECKOUT_FORM_AUTH",
+        "paymentId": "12345678",
+        "paymentConversationId": "conv-abc",
+        "status": "SUCCESS",
+        "merchantId": "100",
+    }
+
+
+def _sign_iyzico_payment_event(data: dict, secret: str) -> str:
+    """
+    Reference implementation of iyzico's webhook signature (X-IYZ-SIGNATURE-V3),
+    independent of the library under test, to guard against regressions.
+
+    Concatenate (no separator): secretKey + iyziEventType + paymentId +
+    paymentConversationId + status, then HMAC-SHA256 (hex) keyed by secretKey.
+    """
+    msg = (
+        secret
+        + str(data.get("iyziEventType", ""))
+        + str(data.get("paymentId", ""))
+        + str(data.get("paymentConversationId", ""))
+        + str(data.get("status", ""))
+    )
+    return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+
+
 class TestVerifyWebhookSignature:
-    """Test webhook signature verification - SECURITY CRITICAL."""
+    """Test webhook signature verification - SECURITY CRITICAL.
+
+    iyzico signs an ordered concatenation of event fields keyed by the
+    merchant secret key (header ``X-IYZ-SIGNATURE-V3``), NOT the raw body.
+    These tests sign with that real scheme so they cannot pass against the
+    old (wrong) raw-body HMAC implementation.
+    """
 
     def test_valid_signature_returns_true(self):
-        """Test valid signature is accepted."""
-        payload = b'{"test": "data"}'
+        """A signature produced by iyzico's real scheme is accepted."""
         secret = "test-secret"
-        signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        data = _iyzico_payment_event()
+        payload = json.dumps(data).encode()
+        signature = _sign_iyzico_payment_event(data, secret)
 
         assert verify_webhook_signature(payload, signature, secret) is True
 
+    def test_matches_independent_reference_implementation(self):
+        """Library signature matches the independent reference exactly."""
+        secret = "test-secret"
+        data = _iyzico_payment_event()
+        assert compute_iyzico_webhook_signature(data, secret) == _sign_iyzico_payment_event(
+            data, secret
+        )
+
+    def test_raw_body_hmac_is_rejected(self):
+        """The OLD raw-body HMAC scheme must no longer validate (regression)."""
+        secret = "test-secret"
+        data = _iyzico_payment_event()
+        payload = json.dumps(data).encode()
+        old_style = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+
+        assert verify_webhook_signature(payload, old_style, secret) is False
+
+    def test_signature_string_field_order(self):
+        """The signed string follows iyzico's documented field order."""
+        secret = "sk"
+        data = _iyzico_payment_event()
+        assert build_iyzico_signature_string(data, secret) == (
+            "sk" + "CHECKOUT_FORM_AUTH" + "12345678" + "conv-abc" + "SUCCESS"
+        )
+
+    def test_hpp_token_format(self):
+        """Notifications carrying a token use the HPP field order."""
+        secret = "sk"
+        data = {
+            "iyziEventType": "CHECKOUT_FORM_AUTH",
+            "iyziPaymentId": "999",
+            "token": "tok-1",
+            "paymentConversationId": "conv-1",
+            "status": "SUCCESS",
+        }
+        assert build_iyzico_signature_string(data, secret) == (
+            "sk" + "CHECKOUT_FORM_AUTH" + "999" + "tok-1" + "conv-1" + "SUCCESS"
+        )
+
+    def test_subscription_format(self):
+        """Subscription notifications use the subscription field order."""
+        secret = "sk"
+        data = {
+            "merchantId": "100",
+            "iyziEventType": "SUBSCRIPTION_ORDER_SUCCESS",
+            "subscriptionReferenceCode": "sub-1",
+            "orderReferenceCode": "ord-1",
+            "customerReferenceCode": "cust-1",
+        }
+        assert build_iyzico_signature_string(data, secret) == (
+            "100" + "sk" + "SUBSCRIPTION_ORDER_SUCCESS" + "sub-1" + "ord-1" + "cust-1"
+        )
+
     def test_invalid_signature_returns_false(self):
         """Test invalid signature is rejected."""
-        payload = b'{"test": "data"}'
+        payload = json.dumps(_iyzico_payment_event()).encode()
         secret = "test-secret"
 
         assert verify_webhook_signature(payload, "invalid-signature", secret) is False
 
     def test_no_secret_configured_fails_closed(self):
         """Missing secret must fail-closed (was fail-open prior to v0.4.0)."""
-        payload = b'{"test": "data"}'
+        payload = json.dumps(_iyzico_payment_event()).encode()
 
         # Empty secret must reject — silent acceptance is a security hole.
         result = verify_webhook_signature(payload, "any-signature", "")
@@ -710,7 +803,7 @@ class TestVerifyWebhookSignature:
 
     def test_no_signature_provided_returns_false(self):
         """Test that missing signature is rejected."""
-        payload = b'{"test": "data"}'
+        payload = json.dumps(_iyzico_payment_event()).encode()
         secret = "test-secret"
 
         # Empty signature should return False
@@ -718,18 +811,17 @@ class TestVerifyWebhookSignature:
         assert result is False
 
     def test_signature_mismatch_returns_false(self):
-        """Test that mismatched signature is rejected."""
-        payload = b'{"test": "data"}'
-        secret = "test-secret"
-        wrong_secret = "wrong-secret"
-        signature = hmac.new(wrong_secret.encode(), payload, hashlib.sha256).hexdigest()
+        """Test that a signature computed with the wrong key is rejected."""
+        data = _iyzico_payment_event()
+        payload = json.dumps(data).encode()
+        signature = _sign_iyzico_payment_event(data, "wrong-secret")
 
-        result = verify_webhook_signature(payload, signature, secret)
+        result = verify_webhook_signature(payload, signature, "test-secret")
         assert result is False
 
     def test_exception_during_verification_returns_false(self):
         """Test exception handling during signature verification."""
-        payload = b'{"test": "data"}'
+        payload = json.dumps(_iyzico_payment_event()).encode()
         secret = "test-secret"
 
         # Mock hmac.new to raise an exception
@@ -741,27 +833,34 @@ class TestVerifyWebhookSignature:
 
     def test_different_payload_invalidates_signature(self):
         """Test that signature validation is payload-specific."""
-        payload1 = b'{"test": "data1"}'
-        payload2 = b'{"test": "data2"}'
         secret = "test-secret"
+        data1 = _iyzico_payment_event()
+        data2 = {**data1, "paymentId": "99999999"}
+        payload1 = json.dumps(data1).encode()
+        payload2 = json.dumps(data2).encode()
 
-        # Generate signature for payload1
-        signature = hmac.new(secret.encode(), payload1, hashlib.sha256).hexdigest()
+        signature = _sign_iyzico_payment_event(data1, secret)
 
-        # Signature should be valid for payload1
+        # Signature should be valid for data1
         assert verify_webhook_signature(payload1, signature, secret) is True
-
-        # But not valid for payload2
+        # But not valid for a body with a different paymentId
         assert verify_webhook_signature(payload2, signature, secret) is False
 
-    def test_uses_constant_time_comparison(self):
-        """Test that constant-time comparison is used (timing attack prevention)."""
-        payload = b'{"test": "data"}'
+    def test_dict_payload_accepted(self):
+        """Verification accepts an already-parsed dict body."""
         secret = "test-secret"
-        signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        data = _iyzico_payment_event()
+        signature = _sign_iyzico_payment_event(data, secret)
 
-        # Verify that hmac.compare_digest is used (this is implicit in the implementation)
-        # The test just verifies the function works correctly
+        assert verify_iyzico_webhook_signature(data, signature, secret) is True
+
+    def test_uses_constant_time_comparison(self):
+        """Test that valid signatures pass (constant-time comparison is used)."""
+        secret = "test-secret"
+        data = _iyzico_payment_event()
+        payload = json.dumps(data).encode()
+        signature = _sign_iyzico_payment_event(data, secret)
+
         assert verify_webhook_signature(payload, signature, secret) is True
 
 

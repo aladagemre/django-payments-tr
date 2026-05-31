@@ -50,11 +50,30 @@ class IyzicoSettings:
         """
         Iyzico base URL.
 
-        Defaults to sandbox URL. Use production URL in production:
-        - Sandbox: https://sandbox-api.iyzipay.com
-        - Production: https://api.iyzipay.com
+        Defaults to the **production** host (``https://api.iyzipay.com``).
+        Set ``IYZICO_BASE_URL = "https://sandbox-api.iyzipay.com"`` to use the
+        sandbox. The value is validated against the known iyzico hosts and
+        must be HTTPS; anything else raises ``ImproperlyConfigured``.
+
+        Rationale (M-03): the previous sandbox default silently sent
+        production traffic to the sandbox (payments appear to "work" but
+        never settle) when an integrator forgot ``IYZICO_BASE_URL``. An
+        unconstrained host also let a misconfigured/compromised setting send
+        merchant-secret-keyed requests to an arbitrary endpoint.
         """
-        return cast(str, get_setting("BASE_URL", default="https://sandbox-api.iyzipay.com"))
+        url = cast(str, get_setting("BASE_URL", default="https://api.iyzipay.com"))
+
+        allowed_hosts = {
+            "https://api.iyzipay.com",
+            "https://sandbox-api.iyzipay.com",
+        }
+        normalized = url.rstrip("/")
+        if normalized not in allowed_hosts:
+            raise ImproperlyConfigured(
+                f"IYZICO_BASE_URL={url!r} is not an allowed iyzico host. "
+                f"Use one of: {', '.join(sorted(allowed_hosts))}."
+            )
+        return normalized
 
     @property
     def locale(self) -> str:
